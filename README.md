@@ -115,6 +115,7 @@ npm run build        # production build
 
 | Doc | What it covers |
 | --- | --- |
+| [ROADMAP.md](ROADMAP.md) | What is shipped, what is open, and what comes next — the milestones through v1.0, and the exit criteria for each |
 | [docs/stack.md](docs/stack.md) | Genesis's role in the Innotel Platform Stack (BusinessOps), and what it owns/consumes |
 | [docs/Architecture.md](docs/Architecture.md) | The engine, the provider contract, the data model, the credit model, document generation, and the request flow |
 | [docs/Integrations.md](docs/Integrations.md) | The exact contract for each integration, the read-only preflight, and the assumptions that need confirming against the other platform |
@@ -159,8 +160,11 @@ Two limits worth stating plainly:
 
 - The provider contracts in [docs/Integrations.md](docs/Integrations.md) mirror the
   sibling platforms' service APIs; each is marked with what still needs confirming
-  against the live deployment. The container image is built in CI and its
-  `/api/health` is asserted from a running container.
+  against the live deployment. **No launch has been carried end to end against the
+  live line yet** — [ROADMAP.md](ROADMAP.md) v0.2 is the milestone that closes
+  that, and until it does, treat the contracts as design rather than as fact. The
+  container image is built in CI and its `/api/health` is asserted from a running
+  container.
 - **The EIN fax path is ready in code, not yet exercised against the live IRS line.**
   It sends the *signed* SS-4 you upload; the IRS fax number is configuration
   (`IRS_EIN_FAX_NUMBER` / `IRS_EIN_FAX_BY_STATE`), and Zeus's fax route needs a

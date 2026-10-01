@@ -1,25 +1,26 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Business } from "../types";
+import { dataDir } from "../paths";
 import { signedSs4Filename } from "./filing";
 
 /**
  * Where the signed SS-4 lives.
  *
- * On the same data volume as the database, because the signed copy is the
- * evidence the filing is made from: losing the container must not lose it, and a
- * filing must never be reconstructed from a record when the signed original is
- * what the IRS is entitled to.
+ * On the same data volume as the database, and literally the same directory:
+ * both ask `../paths` for it, so the two cannot be separated by a deploy. That
+ * matters because the signed copy is the evidence the filing is made from —
+ * losing the container must not lose it, and a filing must never be
+ * reconstructed from a record when the signed original is what the IRS is
+ * entitled to.
  *
  * This module owns the path. Providers never touch the filesystem themselves —
  * the step route loads the bytes and hands them to the provider, which is what
  * keeps the provider layer pure and testable.
  */
 
-export function dataDir(env: Record<string, string | undefined> = process.env): string {
-  const configured = env.GENESIS_DATA_DIR?.trim();
-  return configured || path.join(process.cwd(), "data");
-}
+/** Re-exported because the document store is where callers have always asked. */
+export { dataDir };
 
 export function filingsDir(env: Record<string, string | undefined> = process.env): string {
   return path.join(dataDir(env), "filings");

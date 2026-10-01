@@ -22,6 +22,14 @@ Genesis is a single service: it owns its SQLite volume (`genesis_genesis-data`)
 and reaches the rest of the stack over the network. Nothing else depends on it,
 so its host can change without touching anything else.
 
+That volume is one directory with two children, and `GENESIS_DATA_DIR` is what
+names it: `genesis.db` (the record) and `filings/` (the signed Form SS-4s a
+filing was made from). Both ask `src/lib/paths.ts` for it, so a backup, a mount
+or a restore moves them together — the reasoning is in that file, and it exists
+because the database used to ignore the setting entirely and always open
+`process.cwd()/data`, which coincided with the volume here and would not have
+anywhere else.
+
 ## Where the image comes from
 
 CI publishes the image on every merge to `main`: `latest` and an immutable

@@ -1,5 +1,5 @@
 {
-  "//": "Compiles the pure domain core + tests to CommonJS so `node --test` can run them with no test framework dependency. Only modules that are free of Next.js and database imports are included — the engine, policy, catalog, SS-4 mapping and provider clients are deliberately pure so they stay unit-testable.",
+  "//": "Compiles the pure domain core + tests to CommonJS so `node --test` can run them with no test framework dependency. Modules free of Next.js are what is included here — the engine, policy, catalog, SS-4 mapping and provider clients are deliberately pure so they stay unit-testable. db.ts is the one deliberate exception: it imports better-sqlite3 and opens the deployment's real file, and it is here because where that file lands is worth a test rather than a promise. It pulls in `paths.ts` with it, which is pure and is the single answer to 'where does this deployment keep its data'.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
@@ -14,6 +14,8 @@
   },
   "include": [
     "src/lib/types.ts",
+    "src/lib/paths.ts",
+    "src/lib/db.ts",
     "src/lib/workflow/**/*.ts",
     "src/lib/documents/**/*.ts",
     "src/lib/providers/**/*.ts",
