@@ -1,21 +1,20 @@
 # Genesis — deployment
 
-Genesis runs as one container on the estate's light host (i3), behind the
-Cerulean edge, signing users in through Cerulean's Authentik. This page is the
-runbook: the shape of the deployment, then the exact steps, then what is still
-manual.
+Genesis runs as one container on the estate's app host (i2), behind the Cerulean
+edge, signing users in through Cerulean's Authentik. This page is the runbook:
+the shape of the deployment, then the exact steps, then what is still manual.
 
 ## What it is
 
 | Piece | Value |
 |---|---|
-| Host | **i3** (`192.168.1.53`, the incus host) |
+| Host | **i2** (`192.168.1.52`, the incus host) |
 | Container | `genesis`, Ubuntu 24.04, profiles `default` + `docker` |
-| Address | **`192.168.1.65`** (static in the container; see *Manual* below) |
+| Address | **`192.168.1.66`** (static in the container; see *Manual* below) |
 | Limits | `limits.cpu 2`, `limits.memory 2GiB`, `boot.autostart true` |
 | Project | `/opt/genesis` (a clone of this repo on `main`) |
 | App | `docker compose up -d` → container `genesis`, `0.0.0.0:3000` |
-| Public name | `genesis.innotel.us` → `http://192.168.1.65:3000` (NPM proxy host #198) |
+| Public name | `genesis.innotel.us` → `http://192.168.1.66:3000` (NPM proxy host #198) |
 | TLS | the estate wildcard `*.innotel.us` (NPM certificate #34) |
 | Identity | Authentik application `genesis`, provider pk 49, group `genesis-admins` |
 
@@ -44,14 +43,14 @@ more than a memory-tight host has, so build it where there is headroom:
 ```bash
 docker build -t ghcr.io/innotelinc/genesis:latest 1-primary/genesis
 docker save ghcr.io/innotelinc/genesis:latest | gzip -1 | \
-  ssh root@192.168.1.53 "incus exec genesis -- docker load"
+  ssh root@192.168.1.52 "incus exec genesis -- docker load"
 ```
 
 ## Provisioning, from scratch
 
 The incus hosts are reached over SSH as `root` with the estate's incus password
 (never in a repo file; see `ontrak-sync/scripts/setup.sh` for the reference).
-`sshpass -e ssh root@192.168.1.53` then `incus …`.
+`sshpass -e ssh root@192.168.1.52` then `incus …`.
 
 1. **Container.**
    ```bash
@@ -61,7 +60,7 @@ The incus hosts are reached over SSH as `root` with the estate's incus password
    incus config set genesis boot.autostart=true
    ```
 2. **Static address** — `/etc/netplan/99-static.yaml` with
-   `192.168.1.65/24`, `dhcp4: false`, DNS `192.168.1.71`/`1.1.1.1`, default via
+   `192.168.1.66/24`, `dhcp4: false`, DNS `192.168.1.71`/`1.1.1.1`, default via
    `192.168.1.1`, then `netplan apply`. (The router hands out DHCP in
    `192.168.1.2–209`, so this must also be **reserved** in the router UI — see
    *Manual*.)
@@ -86,7 +85,7 @@ The incus hosts are reached over SSH as `root` with the estate's incus password
 7. **Bring it up.** `cd /opt/genesis && docker compose up -d --no-build`.
 8. **Publish the name.**
    ```bash
-   NPM_CERT_ID=34 NPM_FORWARD_HOST=192.168.1.65 python3 scripts/npm-proxy-hosts.py
+   NPM_CERT_ID=34 NPM_FORWARD_HOST=192.168.1.66 python3 scripts/npm-proxy-hosts.py
    ```
    That upserts the NPM proxy host and (when `TECHNITIUM_URL`/`TECHNITIUM_TOKEN`
    are set) the CNAME. Technitium's API is published on the Cerulean host's
@@ -112,11 +111,13 @@ running container proves the assisted-EIN change is what shipped.
 
 ## Manual, and not yet done
 
-- **Router DHCP reservation for `192.168.1.65`.** The address is static inside
+- **Router DHCP reservation for `192.168.1.66`.** The address is static inside
   the container, but the router's pool (`192.168.1.2–209`) can still hand it to
   another device until it is reserved. The reservation is UI-only
   (**Advanced → Setup → LAN Setup → Address Reservation**); the router's REST
-  login is not scriptable (see `1-primary/cerulean/docs/router.md`).
+  login is not scriptable (see `1-primary/cerulean/docs/router.md`). Note the
+  move from i3: the container now runs on i2, so any reservation for the old
+  `.65` should be removed as well.
 - **Router DHCP reservation** — see above.
 
 ## Secrets (Cerulean Vault)
