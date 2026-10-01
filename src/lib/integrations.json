@@ -1,0 +1,49 @@
+{
+  "targets": [
+    {
+      "key": "zeus",
+      "label": "Zeus (VoiceOps)",
+      "base": "ZEUS_API_URL",
+      "auth": "ZEUS_API_TOKEN",
+      "health": "/api/health",
+      "purpose": "POST /api/phone/numbers — order the business DID"
+    },
+    {
+      "key": "cerulean",
+      "label": "Cerulean (TrustOps)",
+      "base": "CERULEAN_DNS_API_URL",
+      "auth": "CERULEAN_SERVICE_KEY",
+      "health": "/api/health",
+      "purpose": "POST /api/service/domains + /api/service/certificates — DNS zone, wildcard TLS"
+    },
+    {
+      "key": "magnate",
+      "label": "Magnate (RevenueOps)",
+      "base": "MAGNATE_URL",
+      "auth": "MAGNATE_API_TOKEN",
+      "health": "/",
+      "purpose": "POST — subscription for the client",
+      "optional": true
+    },
+    {
+      "key": "oasis",
+      "label": "Oasis (MailOps)",
+      "base": "OASIS_PROVISION_URL",
+      "auth": "OASIS_PROVISION_TOKEN",
+      "health": null,
+      "purpose": "POST — create the mailbox (unset = queued for the operator)",
+      "optional": true
+    },
+    {
+      "key": "signara",
+      "label": "Signara (SignOps)",
+      "base": "SIGNARA_API_URL",
+      "auth": "SIGNARA_API_KEY",
+      "health": "/health",
+      "purpose": "POST /documents/upload + /signatures/requests — hand a packet to the owner to sign",
+      "optional": true,
+      "healthOnOrigin": true,
+      "defaultBase": "https://api.signara.innotel.us/api/v1"
+    }
+  ]
+}

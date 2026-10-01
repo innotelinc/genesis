@@ -2,6 +2,7 @@
 // Verify the sibling-platform integrations, read-only.
 //
 //   node scripts/check-integrations.mjs
+//   npm run check-integrations
 //
 // This makes NO changes anywhere: it asks each configured platform for its
 // health endpoint and reports what came back. It never orders a number,
@@ -10,9 +11,17 @@
 //
 // Exit code is 0 when every *configured* integration answers, 1 otherwise, so it
 // can be a preflight before a real launch.
+//
+// The target list is **not** defined here. It lives in
+// `src/lib/integrations.json`, where the app's `/api/health/reachability` route
+// reads it too — one place a contract can drift, rather than two. The rationale
+// for the three uneven targets (Magnate's missing health route, Oasis's
+// provisioning endpoint, Signara's health outside its API prefix) is in
+// `src/lib/integrations.ts`.
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const TIMEOUT_MS = 8000;
 
@@ -40,63 +49,11 @@ function loadEnv() {
   return env;
 }
 
-const TARGETS = [
-  {
-    key: "zeus",
-    label: "Zeus (VoiceOps)",
-    base: "ZEUS_API_URL",
-    auth: "ZEUS_API_TOKEN",
-    health: "/api/health",
-    purpose: "POST /api/phone/numbers — order the business DID",
-  },
-  {
-    key: "cerulean",
-    label: "Cerulean (TrustOps)",
-    base: "CERULEAN_DNS_API_URL",
-    auth: "CERULEAN_SERVICE_KEY",
-    health: "/api/health",
-    purpose: "POST /api/service/domains + /api/service/certificates — DNS zone, wildcard TLS",
-  },
-  {
-    key: "magnate",
-    label: "Magnate (RevenueOps)",
-    base: "MAGNATE_URL",
-    auth: "MAGNATE_API_TOKEN",
-    // Magnate exposes no `/api/health` route (it is a Next.js storefront), so the
-    // probe is the storefront root — a HEAD/GET that answers is liveness enough,
-    // and a 404 will say so rather than being read as "the service is down".
-    health: "/",
-    purpose: "POST — subscription for the client",
-    optional: true,
-  },
-  {
-    key: "oasis",
-    label: "Oasis (MailOps)",
-    base: "OASIS_PROVISION_URL",
-    auth: "OASIS_PROVISION_TOKEN",
-    // Probed only if it is set. A provisioning endpoint is not a health
-    // endpoint, so it is reported as configured-but-unprobed rather than poked.
-    health: null,
-    purpose: "POST — create the mailbox (unset = queued for the operator)",
-    optional: true,
-  },
-  {
-    key: "signara",
-    label: "Signara (SignOps)",
-    base: "SIGNARA_API_URL",
-    auth: "SIGNARA_API_KEY",
-    health: "/health",
-    // Signara's health controller deliberately excludes /health, /ready and
-    // /metrics from the /api/v1 prefix, so the liveness route lives at the
-    // origin root. SIGNARA_API_URL points at the versioned base, so probing it
-    // verbatim would ask for /api/v1/health and get a 404 from a healthy API.
-    healthOnOrigin: true,
-    // Genesis never signs; this only checks the store Genesis hands packets to.
-    purpose: "POST /documents/upload + /signatures/requests — hand a packet to the owner to sign",
-    optional: true,
-    defaultBase: "https://api.signara.innotel.us/api/v1",
-  },
-];
+/** The shared target list. */
+const here = path.dirname(fileURLToPath(import.meta.url));
+const TARGETS = JSON.parse(
+  fs.readFileSync(path.join(here, "..", "src", "lib", "integrations.json"), "utf8"),
+).targets;
 
 async function probe(base, health) {
   // A leading "/" would make `new URL` drop a base path like `/api/v1`, so join
@@ -129,23 +86,23 @@ console.log("");
 for (const target of TARGETS) {
   const base = env[target.base] ?? target.defaultBase;
   const hasAuth = Boolean(env[target.auth]);
+  const optional = target.optional === true;
 
   if (!base) {
-    const note = target.optional ? "not configured (optional)" : "NOT CONFIGURED";
+    const note = optional ? "not configured (optional)" : "NOT CONFIGURED";
     console.log(`  ${target.key.padEnd(9)} ${note}`);
     console.log(`  ${" ".repeat(9)} ${target.purpose}`);
-    if (!target.optional) problems += 1;
+    if (!optional) problems += 1;
     console.log("");
     continue;
   }
 
   if (!hasAuth) {
     console.log(`  ${target.key.padEnd(9)} configured, but ${target.auth} is empty`);
-    if (!target.optional) problems += 1;
+    if (!optional) problems += 1;
     console.log("");
     continue;
   }
-
 
   if (!target.health) {
     console.log(`  ${target.key.padEnd(9)} configured (not probed — it is a provisioning endpoint)`);
