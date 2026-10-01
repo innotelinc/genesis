@@ -68,6 +68,7 @@ function StepCard({
   signaraReady,
   mode,
   filing,
+  filingProblem,
 }: {
   businessId: string;
   step: StepState;
@@ -75,6 +76,8 @@ function StepCard({
   signaraReady: boolean;
   mode: string;
   filing?: EinFilingRecord;
+  /** Why the signed SS-4 could not be resolved on the last run, if it could not. */
+  filingProblem?: string;
 }) {
   const checklist = checklistOf(step.evidence);
   const artifacts = artifactsOf(step.evidence);
@@ -159,7 +162,7 @@ function StepCard({
       </div>
 
       {step.key === "ein_application" ? (
-        <EinFiling businessId={businessId} filing={filing} />
+        <EinFiling businessId={businessId} filing={filing} problem={filingProblem} />
       ) : null}
     </li>
   );
@@ -184,6 +187,13 @@ export default async function BusinessPage({ params }: { params: Promise<{ id: s
   const humanOnly = new Set(policies.filter((r) => r.mode === "human").map((r) => r.provider));
   const assisted = policies.filter((r) => r.mode === "assisted").map((r) => r.provider);
   const providerModes = new Map(policies.map((r) => [r.provider, r.mode]));
+  // The EIN step records why a signed copy could not be fetched; the panel shows
+  // it next to the control that fixes it.
+  const einEvidence = states.find((s) => s.key === "ein_application")?.evidence;
+  const filingProblem =
+    typeof einEvidence?.signedDocumentProblem === "string"
+      ? einEvidence.signedDocumentProblem
+      : undefined;
   // Signara is optional: the hand-off button only exists once a key is present.
   const signaraReady = signaraConfigured(process.env as Record<string, string | undefined>);
 
@@ -239,6 +249,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ id: s
                     businessId={id}
                     documentKey={DOCUMENT_FOR_STEP[step.key]}
                     filing={business.einFiling}
+                    filingProblem={step.key === "ein_application" ? filingProblem : undefined}
                     key={step.key}
                     mode={providerModes.get(step.provider) ?? "automated"}
                     signaraReady={signaraReady}

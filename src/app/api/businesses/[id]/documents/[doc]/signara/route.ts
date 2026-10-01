@@ -65,12 +65,28 @@ export async function POST(
     });
   }
 
+  // The signed SS-4 will live in Signara, so point the filing at the document as
+  // soon as it is handed over. The EIN step then fetches the signed copy the
+  // moment the responsible party signs — no re-upload, and no chance of filing a
+  // re-render. Recording it is not a signature: the authorization (`authorizedAt`)
+  // is the operator's separate, deliberate act, and the filing stays gated on it.
+  if (key === "ss4" && auth.business.einFiling && handoff.documentId) {
+    store.saveEinFiling(id, {
+      ...auth.business.einFiling,
+      signedDocumentId: handoff.documentId,
+      signedDocumentSource: "signara",
+    });
+  }
+
   store.recordEvent({
     businessId: id,
     stepKey: key === "ss4" ? "ein_application" : "credit",
     actor: auth.user.email,
     kind: "packet_sent_for_signature",
-    detail: handoff.detail,
+    detail:
+      key === "ss4" && auth.business.einFiling
+        ? `${handoff.detail} The EIN filing will read the signed copy from Signara.`
+        : handoff.detail,
     evidence: {
       documentId: handoff.documentId,
       signingRequestId: handoff.signingRequestId,

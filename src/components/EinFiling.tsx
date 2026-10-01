@@ -16,9 +16,12 @@ import type { EinFiling as EinFilingRecord } from "@/lib/types";
 export default function EinFiling({
   businessId,
   filing,
+  problem,
 }: {
   businessId: string;
   filing?: EinFilingRecord;
+  /** Why the signed copy could not be resolved on the last run, if it could not. */
+  problem?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -89,6 +92,7 @@ export default function EinFiling({
             ? ` · signed SS-4 via ${filing.signedDocumentSource ?? "upload"}`
             : " · signed SS-4 not on file"}
           {filing.faxId ? ` · faxed (${filing.faxId})` : ""}
+          {filing.toFaxNumber ? ` · to ${filing.toFaxNumber}` : ""}
           {filing.status ? ` · ${filing.status}` : ""}
         </p>
       ) : (
@@ -96,6 +100,12 @@ export default function EinFiling({
           The responsible party signs the SS-4 and names the firm filing for the business.
         </p>
       )}
+
+      {problem ? (
+        <p className="rounded-md border border-amber-800 bg-amber-950/30 px-3 py-2 text-xs text-amber-100/90">
+          The signed SS-4 could not be resolved: {problem}
+        </p>
+      ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-xs text-neutral-400">
