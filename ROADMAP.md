@@ -175,30 +175,53 @@ their own launch without asking the operator.
 **Goal:** the 1.0 claim is narrow and testable — **somebody other than the
 person who built it can run this for other people.**
 
-- `[~]` **Deployment posture, written down.** The fail-fast session secret and
-  Vault references are in place; what is owed is one page: what Genesis holds,
-  what it must never hold (identity, secrets, DNS, mail, billing, storage), and
-  what it means that it holds the signed Form SS-4 that a filing was made from.
-  A threat model, in the family's shape.
-- `[ ]` **A restore that has been rehearsed.** The SQLite database is the
-  business's record and the `filings/` directory beside it is the evidence the
-  filings were made from; a backup nobody has restored is a belief. Take a
-  backup, boot it somewhere else, and ask it the questions that matter: does it
-  know the businesses, does it carry the history, is the signed copy still
-  readable.
-- `[ ]` **An operator runbook.** Deploy, sign in, read the preflight
-  (`make check-integrations`), tell the three kinds of step apart when something
-  stops, re-drive a filing whose fax was rejected, take a client out without
-  destroying their record, and the incident order when a filing is in doubt —
-  where the answer is "the signed copy on the volume is the evidence, and it is
-  not to be edited".
-- `[ ]` **Version and upgrade posture.** Which sibling APIs this is verified
-  against, what breaks when one of them moves, and how the image rolls forward
-  and back. `docs/Integrations.md` is the contract; this is the runbook around it.
-- `[ ]` **A health surface that says what is actually wrong.** `/api/health`
-  answers; the integrations preflight is a script. The operator surface should
-  carry the preflight's verdict, so "Zeus is not answering" is visible before an
-  owner is told their number is on its way.
+- `[x]` **Deployment posture, written down.** [docs/threat-model.md](docs/threat-model.md)
+  is one page, in the family's shape: what Genesis holds, what it **must never
+  hold** (identity, secrets, signing, another platform's records), the four trust
+  boundaries, the adversary behind each failure mode with the *residual* stated,
+  and what it means that this product holds the signed Form SS-4 a filing was
+  made from. The residual that is stated rather than buried is the one that
+  matters commercially: the tenancy boundary is enforced in the application, so
+  both clients' rows live in one SQLite file, and a query that forgot its
+  `clientId` would be a cross-tenant read — the mitigation is that the rule lives
+  in one tested place, not that the database enforces it. If Genesis ever holds
+  data you would not co-locate, row-level security or a database per client is the
+  next layer, and it is not built.
+- `[x]` **A restore that has been rehearsed.** `scripts/backup-rehearsal.mjs`
+  (`make backup`, `make backups`, `make rehearse-restore`) takes the record and
+  the signed copies **together**, because they are one piece of evidence, and
+  takes the snapshot with SQLite's own `VACUUM INTO` rather than by copying the
+  file — a copy of a database being written is a backup nobody discovers is torn
+  until the day it is needed. The rehearsal restores into a scratch directory,
+  never the live one, and **asserts** the questions that matter: did the schema
+  arrive, do the row counts match the *source* (a snapshot that silently dropped
+  rows is the failure this exists to catch), and is every signed copy the record
+  claims still on disk and still readable as a PDF. It exits non-zero, so a timer
+  can run it. Procedure in [docs/Deployment.md](docs/Deployment.md).
+- `[~]` **An operator runbook.** [docs/Deployment.md](docs/Deployment.md) is it:
+  the host and address, the image pin and how a rollback is a tag change, the
+  data directory, and now backing up and rehearsing a restore. What is still
+  missing is the half an incident needs — telling the three kinds of step apart
+  when something stops, re-driving a filing whose fax was rejected, taking a
+  client out without destroying their record, and the order to follow when a
+  filing is in doubt (where the answer is "the signed copy on the volume is the
+  evidence, and it is not to be edited").
+- `[~]` **Version and upgrade posture.** The image is pinned by tag, `latest`
+  beside an immutable short SHA, and a rollback is a tag change and a
+  `docker compose up -d` — that half is documented in
+  [docs/Deployment.md](docs/Deployment.md). What is not is the other half: which
+  sibling API contract each call is *verified* against, and what breaks when one
+  of them moves. [docs/Integrations.md](docs/Integrations.md) is the contract and
+  marks what still needs confirming; this closes when v0.2 closes.
+- `[~]` **A health surface that says what is actually wrong.** `/api/health`
+  reports liveness *and* the policy — how many steps are defined, which providers
+  may be automated, which are filed only from a signature — so a misconfiguration
+  is visible from outside. `/api/health/integrations` reports which integrations
+  are configured, deliberately without probing them (a fan-out to five services is
+  not a liveness check). What remains is the operator surface carrying the
+  **reachability** verdict `scripts/check-integrations.mjs` already produces, so
+  "Zeus is not answering" is visible before an owner is told their number is on
+  its way.
 - **Exit:** an operator deploys it, launches a business for a client they did not
   onboard by hand, restores the record from a backup they rehearsed, and can
   answer "what did we file, and where is the copy that was signed" without a
@@ -275,7 +298,16 @@ person who built it can run this for other people.**
    rejection, if that is what happens (v0.2).
 3. Extract the tenancy decision from `src/lib/authorize.ts` into a pure rule and
    pin it with a test, the way the automation policy already is (v0.3).
-4. Write the v1.0 posture page — what Genesis holds, what it must never hold, and
-   what it means that it holds the signed copy (v1.0).
-5. Rehearse a restore of the database and `filings/` together, because they are
-   one piece of evidence (v1.0).
+4. ~~Write the v1.0 posture page — what Genesis holds, what it must never hold,
+   and what it means that it holds the signed copy.~~ **Done** —
+   [docs/threat-model.md](docs/threat-model.md), with the residual behind each
+   control stated rather than the comfortable version.
+5. ~~Rehearse a restore of the database and `filings/` together, because they are
+   one piece of evidence.~~ **Done** — `scripts/backup-rehearsal.mjs`, which takes
+   both, restores into a scratch directory, and asserts the schema, the row counts
+   against the source, and every signed copy it claims.
+6. Ship the snapshot off the host, and put `make rehearse-restore` on a timer.
+   The rehearsal proves the *local* restore; that a copy exists somewhere the
+   host's failure cannot reach is a second, separate promise and nobody has made
+   it yet — the script's own docs are careful to say so (v1.0).
+7. Carry one signed SS-4 to the IRS by fax (v0.2, and see the next steps above).

@@ -6,7 +6,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help setup dev build start test typecheck lint seed forms forms-check check-integrations up down logs ps check-compose
+.PHONY: help setup dev build start test typecheck lint seed forms forms-check check-integrations up down logs ps check-compose backup backups rehearse-restore
 
 help: ## Show this help message
 	@echo "genesis — operator workflow"
@@ -51,6 +51,17 @@ typecheck: ## Type-check the whole app
 
 lint: ## ESLint
 	npm run lint
+
+## ---- The record, and proving it comes back --------------------------------
+
+backup: ## Snapshot the database and the signed documents together
+	node scripts/backup-rehearsal.mjs backup
+
+backups: ## List the snapshots, and which is oldest
+	node scripts/backup-rehearsal.mjs list
+
+rehearse-restore: ## Snapshot, restore into a scratch directory, and verify (v1.0)
+	node scripts/backup-rehearsal.mjs rehearse
 
 ## ---- Compose --------------------------------------------------------------
 

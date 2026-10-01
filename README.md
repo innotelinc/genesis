@@ -119,6 +119,8 @@ npm run build        # production build
 | [docs/stack.md](docs/stack.md) | Genesis's role in the Innotel Platform Stack (BusinessOps), and what it owns/consumes |
 | [docs/Architecture.md](docs/Architecture.md) | The engine, the provider contract, the data model, the credit model, document generation, and the request flow |
 | [docs/Integrations.md](docs/Integrations.md) | The exact contract for each integration, the read-only preflight, and the assumptions that need confirming against the other platform |
+| [docs/Deployment.md](docs/Deployment.md) | The deployment runbook: the host, the image pin and rollback, the data directory, and backing up with a rehearsed restore |
+| [docs/threat-model.md](docs/threat-model.md) | What Genesis protects, what it must never hold, the adversaries with the residual risk behind each control, and where the boundary is enforced in code |
 
 ## Repo layout
 

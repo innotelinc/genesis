@@ -30,6 +30,44 @@ because the database used to ignore the setting entirely and always open
 `process.cwd()/data`, which coincided with the volume here and would not have
 anywhere else.
 
+## Backing up, and rehearsing the restore
+
+The record and the signed copies are **one piece of evidence**: the record says an EIN was
+filed, and the signed Form SS-4 is what proves it. So they are taken together, by one
+command:
+
+```bash
+make backup            # a consistent snapshot, through SQLite's own VACUUM INTO
+make backups           # what is there, and which snapshot is oldest
+make rehearse-restore  # snapshot → restore into a scratch directory → verify
+```
+
+`scripts/backup-rehearsal.mjs` is the whole of it, and three things about it are deliberate.
+
+The snapshot is taken by **`VACUUM INTO`**, not by copying `genesis.db`. Copying the file
+of a database that is being written — which is what the portal is doing whenever somebody
+is signed in — can capture a torn page or a WAL that was never folded in, and that is a
+failure nobody discovers until the day it matters. SQLite writes the copy through its own
+machinery, so it is consistent however busy the deployment is.
+
+**The rehearsal restores into a scratch directory** and never touches the live one. It
+takes a fresh snapshot, unpacks it under the system's temporary directory, and asks the
+restored copy the questions that matter: did the schema arrive, do the row counts match the
+*source* (a snapshot that silently dropped rows is the failure this exists to catch), and is
+every signed copy the record claims still on disk and still a PDF. It asserts — a
+non-zero exit on any failure, so a timer can run it — rather than printing "OK" for nobody
+to read.
+
+The default backup root is `$GENESIS_BACKUP_DIR`, then **`<data>/../backups`** — *beside*
+the data directory, not inside it. A backup that lives on the volume it is backing up dies
+with that volume, which is the one thing a backup must not do.
+
+**What a rehearsal does not prove.** It does not prove the *gateway* side of anything: the
+Zeus number, the Cerulean zone, the Oasis mailbox and the Magnate subscription are the
+platform's records, and restoring them is the platform's job (`scripts/check-integrations.mjs`
+is the reachability probe). It also does not re-verify a filing at the IRS — it proves the
+signed copy is readable, not that the fax arrived.
+
 ## Where the image comes from
 
 CI publishes the image on every merge to `main`: `latest` and an immutable

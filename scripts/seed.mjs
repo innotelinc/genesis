@@ -11,7 +11,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const dataDir = path.join(root, "data");
+// The same rule as the app (`src/lib/paths.ts`): `GENESIS_DATA_DIR` names the deployment's
+// data directory, and a seed that ignored it would put a demo database somewhere the portal
+// never reads — the same split the database itself used to have. Empty counts as unset.
+const configured = process.env.GENESIS_DATA_DIR?.trim();
+const dataDir = configured && configured !== "" ? configured : path.join(root, "data");
 fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "genesis.db"));
