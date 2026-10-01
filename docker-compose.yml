@@ -23,7 +23,10 @@ services:
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
     ports:
-      - "3000:3000"
+      # Host port configurable via GENESIS_PORT (default 3000), so the portal can
+      # sit beside the other :3000 services on a shared group-1 host — the same
+      # reason Magnate exposes MAGNATE_PORT. The container always listens on 3000.
+      - "${GENESIS_PORT:-3000}:3000"
     volumes:
       # The SQLite database and its WAL live here; losing the container must not
       # lose the record.
