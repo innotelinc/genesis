@@ -1,5 +1,7 @@
 import crypto from "crypto";
 
+import { adminGroups, isOperator } from "./tenancy-rules";
+
 /**
  * Session handling.
  *
@@ -80,10 +82,13 @@ export function sessionCookieOptions(): {
   };
 }
 
+/**
+ * Whether this subject is an operator (a member of a privileged group).
+ *
+ * Delegates to the pure rule rather than repeating the group matching: one answer
+ * to "who is an operator", so the tenancy rule and every other admin check cannot
+ * drift apart — and so the group list can be tested without a session.
+ */
 export function isAdmin(user: SessionUser): boolean {
-  const admins = (process.env.GENESIS_ADMIN_GROUPS ?? "genesis-admins")
-    .split(",")
-    .map((g) => g.trim())
-    .filter(Boolean);
-  return user.groups.some((g) => admins.includes(g));
+  return isOperator(user.groups, adminGroups());
 }

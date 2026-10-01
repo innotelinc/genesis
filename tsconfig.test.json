@@ -16,6 +16,7 @@
     "src/lib/types.ts",
     "src/lib/paths.ts",
     "src/lib/db.ts",
+    "src/lib/tenancy-rules.ts",
     "src/lib/workflow/**/*.ts",
     "src/lib/documents/**/*.ts",
     "src/lib/providers/**/*.ts",

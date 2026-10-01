@@ -147,10 +147,20 @@ their own launch without asking the operator.
   well as the documents (`src/lib/paths.ts`); before, the database always went to
   `process.cwd()/data`, which coincided with the volume on the shipped compose
   and would have split silently anywhere else.
-- `[ ]` **A test for the tenancy rule, not just the comment.** "A client may only
-  touch its own businesses" is asserted in `src/lib/authorize.ts` and nowhere
-  else; the decision is worth extracting to a pure rule so it can be pinned the
-  way the automation policy is.
+- `[x]` **A test for the tenancy rule, not just the comment.** "A client may only
+  touch its own businesses" was asserted in a comment inside `src/lib/authorize.ts`
+  — a module that imports `next/headers` — so the one property the portal is sold
+  on was the one nothing exercised. The decision now lives in
+  `src/lib/tenancy-rules.ts`, pure and tested, and `authorize.ts` and
+  `session.ts` both call it, so "who may reach what" and "who is an operator"
+  have one answer each rather than a copy per call site. Two properties are pinned
+  rather than described: **a refusal never says whether the business exists**
+  (another client's business and a business that was never created produce the
+  same status and the same sentence, because a 403 confirms a record and a 404
+  does not), and **a blank admin-group list denies rather than defaulting** — the
+  difference between a setting that is absent and one deliberately set to nothing,
+  which is the usual way an access-control bug ships. Covered by
+  `tests/tenancy.test.ts`.
 - `[ ]` **Per-client notification on a step that needs the owner.** The board
   shows it; nobody is told. A launch stalls in "waiting on the owner" exactly
   when a person has stopped looking.
