@@ -1,0 +1,24 @@
+{
+  "//": "Compiles the pure domain core + tests to CommonJS so `node --test` can run them with no test framework dependency. Only modules that are free of Next.js and database imports are included — the engine, policy, catalog, SS-4 mapping and provider clients are deliberately pure so they stay unit-testable.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "incremental": false,
+    "declaration": false,
+    "isolatedModules": false,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/lib/types.ts",
+    "src/lib/workflow/**/*.ts",
+    "src/lib/documents/**/*.ts",
+    "src/lib/providers/**/*.ts",
+    "src/lib/credit/**/*.ts",
+    "src/lib/signara.ts",
+    "tests/**/*.ts"
+  ]
+}

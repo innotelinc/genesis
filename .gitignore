@@ -1,0 +1,28 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Test build (tsconfig.test.json output)
+.test-build/
+
+.env
+.env.local
+.env.pre-*
+.env.bak*
+.env.*.bak
+
+data/
+backups/
+*.sqlite
+*.tar.gz
+
+# Fetched, never committed (scripts/fetch-forms.mjs) — the same posture as
+# every other platform that pins upstream build inputs.
+vendor/
+
+# Cerulean Vault token copies (data/vault/token/<product>.token) — live credentials.
+data/vault/token/
+data/vault/init/
+data/vault/file/

@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --g-bg: #0b0f0e;
+  --g-surface: #121817;
+  --g-border: #223029;
+  --g-accent: #14b8a6;
+  --g-accent-soft: rgba(20, 184, 166, 0.12);
+  --g-muted: #93a29c;
+}
+
+body {
+  background:
+    radial-gradient(900px 420px at 80% -10%, rgba(20, 184, 166, 0.1), transparent 70%),
+    var(--g-bg);
+  color: #eef4f2;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer components {
+  .g-card {
+    background: var(--g-surface);
+    border: 1px solid var(--g-border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+
+  .g-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 9px;
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 550;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .g-btn-primary {
+    background: var(--g-accent);
+    color: #06201c;
+    font-weight: 650;
+  }
+
+  .g-btn-primary:hover {
+    background: #2dd4bf;
+  }
+
+  .g-btn-secondary {
+    border-color: var(--g-border);
+    color: #eef4f2;
+    background: transparent;
+  }
+
+  .g-btn-secondary:hover {
+    border-color: var(--g-accent);
+    background: var(--g-accent-soft);
+  }
+
+  .g-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .g-input {
+    width: 100%;
+    background: #0d1211;
+    border: 1px solid var(--g-border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: #eef4f2;
+    font-size: 14px;
+  }
+
+  .g-input:focus {
+    outline: 2px solid var(--g-accent-soft);
+    border-color: var(--g-accent);
+  }
+
+  .g-label {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--g-muted);
+    margin-bottom: 6px;
+  }
+}

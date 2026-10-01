@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Genesis — BusinessOps</title>
+  <meta name="description" content="One workflow from an idea to a registered, reachable, bankable business. Genesis automates what the stack owns and prepares the rest for the person who must attest to it.">
+  <meta property="og:title" content="Genesis — BusinessOps">
+  <meta property="og:description" content="Business formation, filing preparation and registration orchestration — with the automation boundary enforced in code.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0f0e'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='%2314b8a6'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark;
+      --p-bg: #0b0f0e;
+      --p-bg-elevated: #121817;
+      --p-surface: #171f1d;
+      --p-surface-hover: #1d2724;
+      --p-border: #223029;
+      --p-text: #eef4f2;
+      --p-text-secondary: #c9d6d1;
+      --p-text-muted: #93a29c;
+      --p-accent: #14b8a6;
+      --p-accent-hover: #2dd4bf;
+      --p-accent-tint: rgba(20, 184, 166, 0.12);
+      --p-gold: #f5b544;
+      --p-success: #3ddc84;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --ease: cubic-bezier(.2, .8, .2, 1);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--p-bg); color: var(--p-text);
+      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--p-accent-tint); }
+    a { color: var(--p-accent); text-decoration: none; }
+    a:hover { color: var(--p-accent-hover); }
+    code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    .topbar { position: sticky; top: 0; z-index: 10; background: rgba(11, 15, 14, 0.72); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-bottom: 1px solid var(--p-border); }
+    .topbar-inner { display: flex; align-items: center; gap: 20px; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: 0.04em; color: var(--p-text); }
+    .brand:hover { color: var(--p-text); }
+    .brand .mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--p-bg-elevated); border: 1px solid var(--p-border); font-size: 14px; color: var(--p-accent); }
+    .topbar nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+    .topbar nav a { color: var(--p-text-secondary); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; transition: color .15s var(--ease), background .15s var(--ease); }
+    .topbar nav a:hover { color: var(--p-text); background: var(--p-surface-hover); }
+    .topbar .gh { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; border: 1px solid var(--p-border); border-radius: var(--radius-md); padding: 7px 14px; color: var(--p-text); font-size: 14px; transition: border-color .15s var(--ease), background .15s var(--ease); }
+    .topbar .gh:hover { border-color: var(--p-accent); background: var(--p-accent-tint); color: var(--p-text); }
+
+    .hero { position: relative; overflow: hidden; padding: 96px 0 72px; }
+    .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(600px 320px at 70% -10%, rgba(20, 184, 166, 0.16), transparent 70%), radial-gradient(500px 300px at 15% 110%, rgba(245, 181, 68, 0.06), transparent 70%); pointer-events: none; }
+    .hero-inner { position: relative; max-width: 780px; }
+    .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--p-accent-hover); background: var(--p-accent-tint); border: 1px solid rgba(20, 184, 166, 0.3); border-radius: 999px; padding: 5px 14px; margin: 0 0 24px; }
+    .kicker .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--p-success); box-shadow: 0 0 0 0 rgba(61, 220, 132, 0.5); animation: pulse 2.4s var(--ease) infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(61, 220, 132, 0.45); } 70% { box-shadow: 0 0 0 9px rgba(61, 220, 132, 0); } 100% { box-shadow: 0 0 0 0 rgba(61, 220, 132, 0); } }
+    h1 { font-size: clamp(2.2rem, 5.5vw, 3.4rem); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 20px; font-weight: 700; }
+    h1 .accent { color: var(--p-accent); }
+    .lede { font-size: 1.125rem; color: var(--p-text-secondary); max-width: 680px; margin: 0 0 32px; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-md); padding: 11px 20px; font-size: 15px; font-weight: 550; border: 1px solid transparent; cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease); }
+    .btn-primary { background: var(--p-accent); color: #06201c; font-weight: 600; }
+    .btn-primary:hover { background: var(--p-accent-hover); color: #06201c; }
+    .btn-secondary { border-color: var(--p-border); color: var(--p-text); background: transparent; }
+    .btn-secondary:hover { border-color: var(--p-accent); background: var(--p-accent-tint); color: var(--p-text); }
+    .quickstart { display: flex; align-items: center; gap: 14px; background: var(--p-bg-elevated); border: 1px solid var(--p-border); border-radius: var(--radius-md); padding: 12px 16px; max-width: 680px; font-size: 13.5px; }
+    .quickstart code { color: var(--p-text); white-space: nowrap; overflow-x: auto; }
+    .quickstart code .c { color: var(--p-text-muted); }
+    .quickstart .copy { margin-left: auto; flex: 0 0 auto; background: transparent; border: 1px solid var(--p-border); color: var(--p-text-secondary); border-radius: var(--radius-sm); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; transition: border-color .15s var(--ease), color .15s var(--ease); }
+    .quickstart .copy:hover { border-color: var(--p-accent); color: var(--p-text); }
+    .quickstart .copy.copied { color: var(--p-success); border-color: var(--p-success); }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 56px 0 0; }
+    .stat { background: var(--p-bg-elevated); border: 1px solid var(--p-border); border-radius: var(--radius-md); padding: 16px; }
+    .stat .n { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+    .stat .n em { font-style: normal; color: var(--p-accent); }
+    .stat .l { font-size: 13px; color: var(--p-text-muted); margin-top: 2px; }
+
+    section { padding: 64px 0; }
+    .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 28px; }
+    .sec-head h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0; }
+    .sec-head p { color: var(--p-text-muted); margin: 0; font-size: 14.5px; }
+
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { border: 1px solid var(--p-border); background: var(--p-bg-elevated); border-radius: var(--radius-md); padding: 18px; }
+    .card h3 { margin: 0 0 6px; font-size: 1.02rem; }
+    .card p { margin: 0; color: var(--p-text-secondary); font-size: 14px; }
+    .card p + p { margin-top: 8px; }
+    .tag { display: inline-block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 999px; padding: 3px 9px; margin-bottom: 10px; }
+    .tag-auto { color: var(--p-accent-hover); background: var(--p-accent-tint); }
+    .tag-human { color: var(--p-gold); background: rgba(245, 181, 68, 0.12); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--p-border); vertical-align: top; }
+    th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--p-text-muted); font-weight: 600; }
+    td:first-child { color: var(--p-text); font-weight: 550; white-space: nowrap; }
+    td:last-child { color: var(--p-text-secondary); }
+
+    footer { border-top: 1px solid var(--p-border); margin-top: 40px; padding: 18px 0 40px; color: var(--p-text-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="topbar-inner">
+        <a class="brand" href="/">
+          <span class="mark">✦</span>
+          <span>genesis</span>
+        </a>
+        <nav>
+          <a href="https://github.com/innotelinc/genesis/blob/main/docs/stack.md">Stack role</a>
+          <a class="gh" href="https://github.com/innotelinc/genesis">GitHub ↗</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="kicker"><span class="pulse"></span> BusinessOps · self-hosted</div>
+        <h1>From an idea to a business that <span class="accent">exists</span>.</h1>
+        <p class="lede">
+          Genesis gathers a business's information once, then drives every downstream step —
+          the entity filing, the EIN, the phone number, the domain, the mailbox, the bank
+          packet, the D-U-N-S number and the bureau files. It automates the platforms this
+          stack owns, and prepares — never impersonates — everything that needs the owner's
+          signature.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/innotelinc/genesis">View on GitHub</a>
+          <a class="btn btn-secondary" href="https://github.com/innotelinc/genesis/blob/main/docs/Architecture.md">How it works</a>
+        </div>
+        <div class="quickstart">
+          <code><span class="c">$</span> git clone https://github.com/innotelinc/genesis.git &amp;&amp; cd genesis &amp;&amp; ./scripts/setup.sh</code>
+          <button class="copy" type="button" data-copy="git clone https://github.com/innotelinc/genesis.git && cd genesis && ./scripts/setup.sh">copy</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="n">13 <em>steps</em></div><div class="l">across four phases</div></div>
+        <div class="stat"><div class="n">4 <em>automated</em></div><div class="l">Zeus · Cerulean · Oasis · Magnate</div></div>
+        <div class="stat"><div class="n">1 <em>record</em></div><div class="l">intake once, generate everything</div></div>
+        <div class="stat"><div class="n">0 <em>shortcuts</em></div><div class="l">no automating the IRS or a bank</div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head">
+        <h2>Why Genesis</h2>
+        <p>The portfolio's problem/answer table, in brief.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Facts entered a dozen times</h3>
+          <p>Every portal asks for the same legal name, address and EIN. Genesis captures them once and generates every artifact from the one record.</p>
+        </div>
+        <div class="card">
+          <h3>“Formation bots” that file for you</h3>
+          <p>Scripting the IRS, a bank or Google is barred or illegal. Genesis enforces that line in code and refuses to cross it, whatever calls it.</p>
+        </div>
+        <div class="card">
+          <h3>A domain used as an address</h3>
+          <p>A domain is not a street. The principal place of business is validated, and the filing gate holds every hand-off until it is real.</p>
+        </div>
+        <div class="card">
+          <h3>Launch knowledge in someone's head</h3>
+          <p>The board tracks what is ready, what is blocked and on what, what needs the owner — with an append-only history of both.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head">
+        <h2>What it does</h2>
+        <p>Automated where the stack owns it, prepared where a person must attest.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <span class="tag tag-auto">automated</span>
+          <h3>Number, domain, mail, billing</h3>
+          <p>Zeus orders the business DID · Cerulean registers the zone, publishes the host and issues the wildcard TLS · Oasis creates the branded mailbox · Magnate carries the subscription.</p>
+        </div>
+        <div class="card">
+          <span class="tag tag-human">human-attested</span>
+          <h3>Generated PDF packets</h3>
+          <p>Six documents built from the record: the SS-4 packet attaches the official IRS form prefilled from a verified line mapping and lays every value out beside it, plus the bank packet, the verification dossier and one canonical NAP block.</p>
+        </div>
+        <div class="card">
+          <span class="tag tag-auto">modelled</span>
+          <h3>Tier 1 credit readiness</h3>
+          <p>A published six-factor rubric — identity, file age, banking, tradelines, bureau coverage, utilization. Personal lines are excluded, and every gap names the next honest action.</p>
+        </div>
+        <div class="card">
+          <span class="tag tag-human">human-attested</span>
+          <h3>Google, D&amp;B, Experian, Equifax</h3>
+          <p>Each needs a real, verifiable business. Genesis prepares and tracks; the owner claims, submits and attests to their own data.</p>
+        </div>
+        <div class="card">
+          <span class="tag tag-auto">platform</span>
+          <h3>Authentik SSO, Cerulean Vault</h3>
+          <p>Identity belongs to Cerulean's Authentik and secrets to Cerulean Vault. Genesis stores no password and no long-lived credential.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head">
+        <h2>The boundary</h2>
+        <p>Enforced in code, asserted in tests, checked in CI.</p>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Never automated</th><th>Because</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Filing with the IRS</td>
+            <td>The online EIN assistant is restricted to the entity's responsible party. Genesis prefills Form SS-4; the party submits it.</td>
+          </tr>
+          <tr>
+            <td>Opening a bank account</td>
+            <td>Account opening requires the signer's identity and beneficial-ownership verification under KYC rules.</td>
+          </tr>
+          <tr>
+            <td>A Google Business Profile</td>
+            <td>Google verifies a real, staffed location and suspends listings that have none.</td>
+          </tr>
+          <tr>
+            <td>Bureau registrations</td>
+            <td>D&amp;B, Experian and Equifax require the business to attest to its own data.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      <div>© 2026 Genesis — BusinessOps. One job per platform; consume the platform services.</div>
+      <div style="margin-top:6px;">
+        <a href="https://github.com/innotelinc/genesis">GitHub</a> ·
+        <a href="https://github.com/innotelinc/innotel-platform-stack">Innotel Platform Stack</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll(".quickstart .copy").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var text = button.getAttribute("data-copy") || "";
+        var done = function () {
+          button.textContent = "copied";
+          button.classList.add("copied");
+          setTimeout(function () {
+            button.textContent = "copy";
+            button.classList.remove("copied");
+          }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else {
+          var area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          try { document.execCommand("copy"); } catch (e) { /* clipboard unavailable */ }
+          document.body.removeChild(area);
+          done();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

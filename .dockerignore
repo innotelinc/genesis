@@ -1,0 +1,17 @@
+node_modules
+.next
+.test-build
+data
+backups
+
+.git
+.github
+.githooks
+
+.env
+.env.*
+*.bak
+
+*.md
+docs
+web

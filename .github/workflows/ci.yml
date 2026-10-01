@@ -1,0 +1,94 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ci.yml — static checks on push and pull requests.
+#
+# The repo is maintained at zero findings: structure, compose, hooks, and the
+# landing page stay conformant. Attribution guard lives in its own workflow.
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  structure:
+    name: Repository structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conformant structure
+        run: |
+          set -euo pipefail
+          for f in README.md LICENSE .env.example web/landing/index.html; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing required file: $f"
+              exit 1
+            fi
+          done
+          echo "structure: ok"
+
+      - name: .gitignore covers .env
+        run: |
+          set -euo pipefail
+          if ! grep -q '^\.env' .gitignore; then
+            echo "::warning:: .gitignore does not list .env"
+          fi
+
+  landing:
+    name: Landing page sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Landing sanity
+        run: |
+          set -euo pipefail
+          f=web/landing/index.html
+          grep -qi '<title>' "$f" || { echo "::error::landing has no <title>"; exit 1; }
+          grep -qi 'og:title' "$f" || { echo "::error::landing has no og:title"; exit 1; }
+          echo "landing: ok"
+
+  build:
+    name: Type-check, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Policy invariants hold against the built catalog
+        run: |
+          set -euo pipefail
+          # The human/automated split is the one thing a release must not get
+          # wrong, so assert it here without booting the server.
+          node -e "
+            const { execSync } = require('node:child_process');
+            execSync('npx tsc -p tsconfig.test.json', { stdio: 'inherit' });
+            const { STEP_CATALOG } = require('./.test-build/src/lib/workflow/catalog.js');
+            const { PROVIDER_POLICY } = require('./.test-build/src/lib/workflow/policy.js');
+            for (const step of STEP_CATALOG) {
+              const mode = PROVIDER_POLICY[step.provider].mode;
+              if (mode !== (step.requiresHuman ? 'human' : 'automated')) {
+                throw new Error(step.key + ': ' + step.provider + ' is ' + mode);
+              }
+            }
+            console.log('policy: ' + STEP_CATALOG.length + ' steps consistent');
+          "

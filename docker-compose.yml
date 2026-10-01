@@ -1,0 +1,43 @@
+# genesis — the portal.
+#
+# Genesis is a single service: it owns its SQLite database and reaches the rest
+# of the stack over the network (Cerulean for DNS/TLS, Zeus for numbers, Oasis
+# for mail, Magnate for billing). Nothing else in the stack depends on Genesis,
+# so it can run here, on any host, or not at all.
+name: genesis
+
+services:
+  genesis:
+    build:
+      context: .
+    image: ghcr.io/innotelinc/genesis:latest
+    container_name: genesis
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # The Docker host's LAN address, not a bridge address: the edge reaches
+      # this port from outside the compose network (see the platform stack's
+      # "LAN IPs only" rule). Bind to all interfaces and publish on the host.
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    volumes:
+      # The SQLite database and its WAL live here; losing the container must not
+      # lose the record.
+      - genesis-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  genesis-data:
