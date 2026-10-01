@@ -35,6 +35,11 @@ services:
       # The SQLite database and its WAL live here; losing the container must not
       # lose the record.
       - genesis-data:/app/data
+      # This product's Cerulean Vault token, read-only. Cerulean's Vault bootstrap
+      # mints it (VAULT_PRODUCT_TOKENS=genesis there) and renews it in place; the
+      # stack only ever reads it. docker-entrypoint.sh resolves the `vault://`
+      # references in .env with it. See data/vault/token/ (gitignored).
+      - ./data/vault/token:/vault/token:ro
     healthcheck:
       test:
         - CMD
