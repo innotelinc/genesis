@@ -299,6 +299,119 @@ export async function downloadDocument(input: {
   };
 }
 
+// ── the signing request's own state ───────────────────────────────────────────
+
+/**
+ * What a signing request means to Genesis, collapsed from Signara's document
+ * status and its per-signer statuses.
+ *
+ * Signara's own vocabulary is wider than anything Genesis does with it: a
+ * `SigningRequest.status` is a `DocumentStatus` (DRAFT, AWAITING_SIGNATURE,
+ * IN_PROGRESS, COMPLETED, VOIDED, CANCELLED, EXPIRED) and each signer has a
+ * `SignerStatus` (PENDING, INVITED, VIEWED, SIGNED, DECLINED, RESCINDED,
+ * EXPIRED). The one fact the EIN filing cares about is whether the copy is
+ * signed, so that is the state this reports — everything else is “not yet” or
+ * “not going to happen”.
+ */
+export type SigningState =
+  | "awaiting"
+  | "signing"
+  | "signed"
+  | "declined"
+  | "cancelled"
+  | "expired"
+  | "unknown";
+
+export function signingStateFrom(inputs: {
+  status?: string;
+  signerStatuses?: string[];
+}): SigningState {
+  const signerStatuses = (inputs.signerStatuses ?? []).map((s) => s.toUpperCase());
+  if (signerStatuses.includes("DECLINED")) return "declined";
+
+  switch ((inputs.status ?? "").toUpperCase()) {
+    case "COMPLETED":
+      return "signed";
+    case "IN_PROGRESS":
+      return "signing";
+    case "AWAITING_SIGNATURE":
+    case "DRAFT":
+      return "awaiting";
+    case "VOIDED":
+    case "CANCELLED":
+      return "cancelled";
+    case "EXPIRED":
+      return "expired";
+    default:
+      return "unknown";
+  }
+}
+
+export interface SigningStatus {
+  ok: boolean;
+  status: number;
+  detail: string;
+  state: SigningState;
+  /** Signara's own status string, for an operator who needs the exact word. */
+  rawStatus?: string;
+  completedAt?: string;
+}
+
+/**
+ * Read a signing request's state — whether the party has signed yet.
+ *
+ * This is a *read*: it never signs, reminds or cancels anything. Genesis asks so
+ * the filing can say “awaiting signature” rather than silently showing an unsigned
+ * packet as ready to file.
+ */
+export async function fetchSigningStatus(input: {
+  env: Record<string, string | undefined>;
+  requestId: string;
+  /** Injectable for tests. */
+  fetchImpl?: typeof fetch;
+}): Promise<SigningStatus> {
+  if (!signaraConfigured(input.env)) {
+    return {
+      ok: false,
+      status: 0,
+      state: "unknown",
+      detail: "Signara is not configured: set SIGNARA_API_KEY.",
+    };
+  }
+
+  const doFetch = input.fetchImpl ?? fetch;
+  const res = await doFetch(
+    `${signaraBaseUrl(input.env)}/signatures/requests/${encodeURIComponent(input.requestId)}`,
+    { headers: { "x-api-key": input.env.SIGNARA_API_KEY ?? "" } },
+  );
+  const json = await readJson(res);
+
+  if (!res.ok) {
+    const reason = failure(res.status, json, "read the signing request");
+    return { ok: false, status: res.status, state: "unknown", detail: reason.detail };
+  }
+
+  const request = json as {
+    status?: string;
+    completedAt?: string;
+    signers?: { status?: string }[];
+  } | null;
+
+  const state = signingStateFrom({
+    status: request?.status,
+    signerStatuses: request?.signers?.map((s) => s.status ?? ""),
+  });
+
+  return {
+    ok: true,
+    status: res.status,
+    state,
+    rawStatus: request?.status,
+    completedAt: request?.completedAt,
+    detail: `Signing request is ${request?.status ?? "unknown"}.`,
+  };
+}
+
 /** The people on a business who should sign, derived from the record. */
 export function signersFor(business: { people: { fullName: string; email: string; role: string }[] }): SignaraSigner[] {
   return business.people

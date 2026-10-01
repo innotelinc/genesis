@@ -1,8 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EinFiling as EinFilingRecord } from "@/lib/types";
+
+/** How the signing request's state reads to a person. */
+const SIGNING_LABEL: Record<string, { text: string; className: string }> = {
+  awaiting: { text: "awaiting signature", className: "text-sky-300" },
+  signing: { text: "being signed", className: "text-sky-300" },
+  signed: { text: "signed — ready to file", className: "text-emerald-300" },
+  declined: { text: "declined", className: "text-red-300" },
+  cancelled: { text: "cancelled", className: "text-red-300" },
+  expired: { text: "expired", className: "text-amber-300" },
+  unknown: { text: "status unavailable", className: "text-neutral-400" },
+};
 
 /**
  * The EIN filing panel.
@@ -35,6 +46,25 @@ export default function EinFiling({
   const [signaraDocumentId, setSignaraDocumentId] = useState(
     filing?.signedDocumentSource === "signara" ? (filing?.signedDocumentId ?? "") : "",
   );
+  const [signing, setSigning] = useState<{ state: string; detail: string } | null>(null);
+
+  // The signing state is the one fact that changes without Genesis acting, so it
+  // is read from the server rather than inferred from the filing record — a stale
+  // "awaiting signature" on a filing about to be sent is the wrong thing to show.
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/businesses/${businessId}/ein-filing`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { signing?: { state: string; detail: string } } | null) => {
+        if (active && body?.signing) setSigning(body.signing);
+      })
+      .catch(() => {
+        /* the panel still works without it */
+      });
+    return () => {
+      active = false;
+    };
+  }, [businessId]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,6 +134,16 @@ export default function EinFiling({
       {problem ? (
         <p className="rounded-md border border-amber-800 bg-amber-950/30 px-3 py-2 text-xs text-amber-100/90">
           The signed SS-4 could not be resolved: {problem}
+        </p>
+      ) : null}
+
+      {signing ? (
+        <p className="text-xs text-neutral-400">
+          Signing request:{" "}
+          <span className={SIGNING_LABEL[signing.state]?.className ?? "text-neutral-400"}>
+            {SIGNING_LABEL[signing.state]?.text ?? signing.state}
+          </span>
+          {signing.detail ? <span className="text-neutral-600"> · {signing.detail}</span> : null}
         </p>
       ) : null}
 

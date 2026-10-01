@@ -77,6 +77,8 @@ export interface EinFiling {
    * or `upload` (the default) — a file on Genesis's own data volume.
    */
   signedDocumentSource?: "upload" | "signara";
+  /** The Signara signing request the responsible party signs in, once opened. */
+  signingRequestId?: string;
   /** The IRS EIN fax line the filing was sent to, once it has been. */
   toFaxNumber?: string;
   /** Zeus's id for the outbound fax, once it has been sent. */

@@ -109,6 +109,7 @@ export function finalizeEinFiling(
     authorizedAt: fields.authorizedAt,
     signedDocumentId: signed?.id ?? previous?.signedDocumentId,
     signedDocumentSource: signed?.source ?? previous?.signedDocumentSource,
+    signingRequestId: previous?.signingRequestId,
     toFaxNumber: previous?.toFaxNumber,
     faxId: previous?.faxId,
     faxedAt: previous?.faxedAt,

@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { sendPacketToSignara, signersFor, signaraConfigured } from "../src/lib/signara";
+import {
+  fetchSigningStatus,
+  sendPacketToSignara,
+  signingStateFrom,
+  signersFor,
+  signaraConfigured,
+} from "../src/lib/signara";
 import { makeBusiness } from "./fixtures";
 
 interface Call {
@@ -146,4 +152,63 @@ test("signers come from the record's people that have an email", () => {
   );
   assert.equal(signers[0].name, "Dana Reed");
   assert.equal(signers[0].role, "signer");
+});
+
+// ── the signing request's state ───────────────────────────────────────────────
+
+const SIGNING_ENV = {
+  SIGNARA_API_KEY: "sgn_test",
+  SIGNARA_API_URL: "https://api.signara.innotel.us/api/v1",
+};
+
+test("Signara's document status collapses to the state the filing cares about", () => {
+  assert.equal(signingStateFrom({ status: "COMPLETED" }), "signed");
+  assert.equal(signingStateFrom({ status: "AWAITING_SIGNATURE" }), "awaiting");
+  assert.equal(signingStateFrom({ status: "IN_PROGRESS" }), "signing");
+  assert.equal(signingStateFrom({ status: "CANCELLED" }), "cancelled");
+  assert.equal(signingStateFrom({ status: "EXPIRED" }), "expired");
+  assert.equal(signingStateFrom({ status: "SOMETHING_NEW" }), "unknown");
+  assert.equal(signingStateFrom({}), "unknown");
+});
+
+test("a declined signer outranks a request that still says in progress", () => {
+  // The request is not COMPLETED, but the only signer has refused — reporting
+  // "being signed" there would keep a filing waiting on something that is over.
+  assert.equal(
+    signingStateFrom({ status: "IN_PROGRESS", signerStatuses: ["DECLINED"] }),
+    "declined",
+  );
+});
+
+test("the request state is read live, and only read", async () => {
+  const { impl, calls } = recordingFetch([
+    { status: 200, json: { status: "COMPLETED", completedAt: "2026-09-30T12:00:00.000Z", signers: [{ status: "SIGNED" }] } },
+  ]);
+
+  const status = await fetchSigningStatus({ env: SIGNING_ENV, requestId: "req_1", fetchImpl: impl });
+
+  assert.equal(status.ok, true);
+  assert.equal(status.state, "signed");
+  assert.equal(status.completedAt, "2026-09-30T12:00:00.000Z");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, "GET");
+  assert.match(calls[0].url, /\/signatures\/requests\/req_1$/);
+  assert.equal(calls[0].headers["x-api-key"], "sgn_test");
+});
+
+test("an unconfigured Signara reports unknown rather than a false state", async () => {
+  const status = await fetchSigningStatus({ env: {}, requestId: "req_1" });
+  assert.equal(status.ok, false);
+  assert.equal(status.state, "unknown");
+  assert.match(status.detail, /SIGNARA_API_KEY/);
+});
+
+test("a rejected signing-status read is reported, not read as unsigned", async () => {
+  const { impl } = recordingFetch([{ status: 401, json: {} }]);
+
+  const status = await fetchSigningStatus({ env: SIGNING_ENV, requestId: "req_1", fetchImpl: impl });
+
+  assert.equal(status.ok, false);
+  assert.equal(status.state, "unknown");
+  assert.match(status.detail, /API key/i);
 });

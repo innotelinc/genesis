@@ -75,6 +75,7 @@ export async function POST(
       ...auth.business.einFiling,
       signedDocumentId: handoff.documentId,
       signedDocumentSource: "signara",
+      signingRequestId: handoff.signingRequestId,
     });
   }
 

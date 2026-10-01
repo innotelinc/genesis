@@ -3,6 +3,7 @@ import { authorizeBusiness } from "@/lib/authorize";
 import { errorJson, json } from "@/lib/http";
 import { saveSignedSs4 } from "@/lib/documents/filing-store";
 import { finalizeEinFiling, parseEinFilingForm } from "@/lib/documents/ein-filing-request";
+import { fetchSigningStatus } from "@/lib/signara";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const auth = await authorizeBusiness(id);
   if (!auth.ok) return auth.response;
 
-  return json({ filing: auth.business.einFiling ?? null });
+  const filing = auth.business.einFiling;
+
+  // The signing request's state is read live rather than cached: it is the one
+  // fact that changes without Genesis doing anything, and a stale "awaiting
+  // signature" is exactly the wrong thing to show on a filing about to be sent.
+  const signing = filing?.signingRequestId
+    ? await fetchSigningStatus({
+        env: process.env as Record<string, string | undefined>,
+        requestId: filing.signingRequestId,
+      })
+    : null;
+
+  return json({
+    filing: filing ?? null,
+    signing: signing
+      ? { state: signing.state, detail: signing.detail, rawStatus: signing.rawStatus ?? null }
+      : null,
+  });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
