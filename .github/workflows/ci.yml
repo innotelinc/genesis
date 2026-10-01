@@ -77,18 +77,35 @@ jobs:
       - name: Policy invariants hold against the built catalog
         run: |
           set -euo pipefail
-          # The human/automated split is the one thing a release must not get
-          # wrong, so assert it here without booting the server.
+          # The automation boundary is the one thing a release must not get
+          # wrong, so assert it here without booting the server. There are three
+          # modes now: a step is `requiresHuman` exactly when its provider is
+          # human-only, and an *assisted* provider (the IRS) is run by its own
+          # provider, gated on the responsible party's attestation.
           node -e "
             const { execSync } = require('node:child_process');
             execSync('npx tsc -p tsconfig.test.json', { stdio: 'inherit' });
             const { STEP_CATALOG } = require('./.test-build/src/lib/workflow/catalog.js');
             const { PROVIDER_POLICY } = require('./.test-build/src/lib/workflow/policy.js');
+            const modes = ['automated', 'assisted', 'human'];
             for (const step of STEP_CATALOG) {
-              const mode = PROVIDER_POLICY[step.provider].mode;
-              if (mode !== (step.requiresHuman ? 'human' : 'automated')) {
-                throw new Error(step.key + ': ' + step.provider + ' is ' + mode);
+              const policy = PROVIDER_POLICY[step.provider];
+              if (!policy) throw new Error(step.key + ': no policy for ' + step.provider);
+              if (!modes.includes(policy.mode)) {
+                throw new Error(step.key + ': ' + step.provider + ' has unknown mode ' + policy.mode);
+              }
+              if (step.requiresHuman !== (policy.mode === 'human')) {
+                throw new Error(
+                  step.key + ': ' + step.provider + ' is ' + policy.mode +
+                  ' but requiresHuman=' + step.requiresHuman,
+                );
               }
             }
-            console.log('policy: ' + STEP_CATALOG.length + ' steps consistent');
+            const assisted = STEP_CATALOG.filter(
+              (s) => PROVIDER_POLICY[s.provider].mode === 'assisted',
+            ).map((s) => s.provider);
+            if (assisted.length === 0) throw new Error('no assisted provider: the EIN filing lost its gate');
+            console.log(
+              'policy: ' + STEP_CATALOG.length + ' steps consistent; assisted: ' + assisted.join(', '),
+            );
           "
