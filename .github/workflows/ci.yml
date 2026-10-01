@@ -51,6 +51,33 @@ jobs:
           grep -qi 'og:title' "$f" || { echo "::error::landing has no og:title"; exit 1; }
           echo "landing: ok"
 
+  container:
+    name: Container image builds and boots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the portal image
+        run: docker build -t genesis:ci .
+
+      - name: Boot it and answer /api/health
+        run: |
+          set -euo pipefail
+          docker run -d --name genesis-ci -p 3000:3000 -e SESSION_SECRET=ci-only genesis:ci
+          for _ in $(seq 1 20); do
+            if curl -fsS -m 5 http://127.0.0.1:3000/api/health -o /tmp/health.json; then break; fi
+            sleep 3
+          done
+          cat /tmp/health.json
+          # Liveness, the schema/migration path (the DB is opened before this
+          # route answers), and the fact that the assisted EIN gate is present.
+          grep -q '"status":"ok"' /tmp/health.json
+          grep -q '"assistedProviders":\["irs"\]' /tmp/health.json
+
+      - name: Container logs
+        if: failure()
+        run: docker logs genesis-ci || true
+
   build:
     name: Type-check, test, build
     runs-on: ubuntu-latest

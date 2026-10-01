@@ -159,7 +159,8 @@ Two limits worth stating plainly:
 
 - The provider contracts in [docs/Integrations.md](docs/Integrations.md) mirror the
   sibling platforms' service APIs; each is marked with what still needs confirming
-  against the live deployment. The container image is not yet exercised by CI.
+  against the live deployment. The container image is built in CI and its
+  `/api/health` is asserted from a running container.
 - **The EIN fax path is ready in code, not yet exercised against the live IRS line.**
   It sends the *signed* SS-4 you upload; the IRS fax number is configuration
   (`IRS_EIN_FAX_NUMBER` / `IRS_EIN_FAX_BY_STATE`), and Zeus's fax route needs a
