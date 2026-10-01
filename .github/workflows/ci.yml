@@ -136,3 +136,35 @@ jobs:
               'policy: ' + STEP_CATALOG.length + ' steps consistent; assisted: ' + assisted.join(', '),
             );
           "
+
+  # The image a host runs should be a thing CI built from a reviewed commit, not
+  # whatever somebody built on their laptop and carried over (the first
+  # deployment did exactly that — see docs/Deployment.md). Every merge to `main`
+  # publishes `latest` and an immutable `:<short-sha>` tag; a host pins the SHA
+  # tag with GENESIS_IMAGE_TAG, and rolls back by pinning the previous one.
+  publish:
+    name: Publish the image to GHCR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push latest and the commit tag
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          short="${GITHUB_SHA::7}"
+          docker build -t "$image:latest" -t "$image:$short" .
+          docker push "$image:latest"
+          docker push "$image:$short"
+          echo "pushed $image:latest and $image:$short"

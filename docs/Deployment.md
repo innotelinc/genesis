@@ -23,23 +23,29 @@ Genesis is a single service: it owns its SQLite volume (`genesis_genesis-data`)
 and reaches the rest of the stack over the network. Nothing else depends on it,
 so its host can change without touching anything else.
 
-## Why the image is built off-host
+## Where the image comes from
 
-i3 is memory-tight (5.4 GiB total, ~2 GiB free) and a Next.js production build
-wants ~3 GB of heap. The image is therefore built on the development host and
-carried to the container — the same reason Magnate's image was carried over as
-an artifact rather than rebuilt on i3:
+CI publishes the image on every merge to `main`: `latest` and an immutable
+`:<short-sha>` tag (`ghcr.io/innotelinc/genesis`). A host pins the SHA with
+`GENESIS_IMAGE_TAG`, so what runs is a reviewed commit and a rollback is a tag
+change:
 
 ```bash
-# on a host with headroom and Docker
+# in the host's .env — the short SHA CI pushed
+GENESIS_IMAGE_TAG=<short-sha>
+# then, on the container
+docker compose pull && docker compose up -d --no-build
+```
+
+A host that cannot pull (or a first deployment before the package is public) can
+build locally and carry the image over — the build wants ~3 GB of heap, which is
+more than a memory-tight host has, so build it where there is headroom:
+
+```bash
 docker build -t ghcr.io/innotelinc/genesis:latest 1-primary/genesis
 docker save ghcr.io/innotelinc/genesis:latest | gzip -1 | \
   ssh root@192.168.1.53 "incus exec genesis -- docker load"
 ```
-
-Publishing the image to GHCR from CI (so this step disappears) is on the v1.0
-roadmap; today `ghcr.io/innotelinc/genesis:latest` is what the compose file names,
-and `docker compose up -d --no-build` uses whatever was loaded.
 
 ## Provisioning, from scratch
 
@@ -113,5 +119,4 @@ running container proves the assisted-EIN change is what shipped.
 - **SecretOps.** `SESSION_SECRET` and `OIDC_CLIENT_SECRET` live in the
   container's `.env`. The estate's target is `vault://cerulean/genesis#…`
   references resolved at startup.
-- **Image publishing.** CI builds and boots the image but does not push it;
-  `ghcr.io/innotelinc/genesis` does not exist yet.
+- **Secrets in the container `.env`.** Covered above.

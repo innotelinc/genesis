@@ -10,7 +10,11 @@ services:
   genesis:
     build:
       context: .
-    image: ghcr.io/innotelinc/genesis:latest
+    # CI publishes `latest` and an immutable `:<short-sha>` per merge to main
+    # (`.github/workflows/ci.yml`). A host pins the SHA tag with
+    # GENESIS_IMAGE_TAG, so what runs is a reviewed commit and a rollback is a
+    # tag change — see docs/Deployment.md.
+    image: ghcr.io/innotelinc/genesis:${GENESIS_IMAGE_TAG:-latest}
     container_name: genesis
     restart: unless-stopped
     env_file:
