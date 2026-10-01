@@ -68,10 +68,11 @@ The incus hosts are reached over SSH as `root` with the estate's incus password
 3. **Docker.** `apt-get update && apt-get install -y docker.io docker-compose-v2 git`.
 4. **Source + image.** `git clone https://github.com/innotelinc/genesis.git /opt/genesis`,
    then carry the image over as above.
-5. **`.env`** — see `.env.example`. On a production host the values that are
-   secret (`SESSION_SECRET`, `OIDC_CLIENT_SECRET`) are written straight into the
-   container's `.env` today; moving them to `vault://` references is on the
-   roadmap.
+5. **`.env`** — see `.env.example`. On a production host the two secrets
+   (`SESSION_SECRET`, `OIDC_CLIENT_SECRET`) are **Cerulean Vault references**,
+   not literals: the container's `.env` carries
+   `vault://cerulean/genesis#<KEY>` and `docker-entrypoint.sh` resolves them
+   before the server boots (see *Secrets* below).
 6. **Authentik application.**
    ```bash
    cd 1-primary/cerulean
@@ -116,7 +117,47 @@ running container proves the assisted-EIN change is what shipped.
   another device until it is reserved. The reservation is UI-only
   (**Advanced → Setup → LAN Setup → Address Reservation**); the router's REST
   login is not scriptable (see `1-primary/cerulean/docs/router.md`).
-- **SecretOps.** `SESSION_SECRET` and `OIDC_CLIENT_SECRET` live in the
-  container's `.env`. The estate's target is `vault://cerulean/genesis#…`
-  references resolved at startup.
-- **Secrets in the container `.env`.** Covered above.
+- **Router DHCP reservation** — see above.
+
+## Secrets (Cerulean Vault)
+
+Genesis holds two secrets, and neither is written into the container's `.env` as
+plaintext on a deployed host:
+
+| Key | What it is |
+| --- | --- |
+| `SESSION_SECRET` | signs the session cookie |
+| `OIDC_CLIENT_SECRET` | the Authentik client secret |
+
+They live at `cerulean/genesis` in Cerulean Vault (KV v2), and the container's
+`.env` carries references:
+
+```
+SESSION_SECRET=vault://cerulean/genesis#SESSION_SECRET
+OIDC_CLIENT_SECRET=vault://cerulean/genesis#OIDC_CLIENT_SECRET
+```
+
+`docker-entrypoint.sh` runs `scripts/vault-env.mjs` (same grammar as Cerulean,
+Zeus, Onyx, Atlas and Distro) before the server starts, and **aborts the
+container** if a reference cannot be resolved — a literal `vault://` value never
+reaches the app.
+
+Genesis reads the store with a path-scoped `genesis` token (policy
+`cerulean/data/genesis`), not the mount-wide one. Cerulean mints it from
+`VAULT_PRODUCT_TOKENS` and writes `/vault/token/genesis.token`; a copy lives at
+`data/vault/token/genesis.token` in this repo (and on the host). No `genesis`
+entry in `VAULT_PRODUCT_TOKENS` means no token, and the reference cannot resolve.
+
+Seed or rotate the path with the estate's migrator:
+
+```bash
+VAULT_ADDR=http://192.168.1.71:8200 \
+VAULT_TOKEN="$(cat data/vault/token/cerulean.token)" \
+VAULT_PREFIX=cerulean VAULT_PATH=genesis \
+  python3 ../ips/scripts/vault-migrate.py --from-env-file .env \
+    --keys SESSION_SECRET,OIDC_CLIENT_SECRET
+```
+
+Check every reference in the estate actually resolves with
+`ips/scripts/check-vault-refs.py`; from a host that cannot reach Vault it reports
+the references it could not check and passes.

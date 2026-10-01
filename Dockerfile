@@ -34,6 +34,11 @@ COPY --from=build /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 # it — the EIN filing column has to reach a database created before it existed.
 COPY --from=build /app/scripts/schema.sql ./scripts/schema.sql
 COPY --from=build /app/scripts/migrations ./scripts/migrations
+# The boot-time Cerulean Vault resolver (docker-entrypoint.sh runs it before the
+# server), so a `vault://` reference in .env is resolved, not passed through.
+COPY --from=build /app/scripts/vault-env.mjs ./scripts/vault-env.mjs
+COPY --from=build /app/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 RUN mkdir -p /app/data
 EXPOSE 3000
@@ -41,4 +46,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+# The entrypoint resolves Vault references, then execs the CMD (the standalone
+# Next.js server), so the process tree is the server itself and it receives
+# signals directly.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
