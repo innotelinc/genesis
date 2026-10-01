@@ -15,6 +15,16 @@ const SIGNING_LABEL: Record<string, { text: string; className: string }> = {
   unknown: { text: "status unavailable", className: "text-neutral-400" },
 };
 
+/** How the fax spool's answer reads to a person. */
+const DELIVERY_LABEL: Record<string, { text: string; className: string }> = {
+  delivered: { text: "delivered — the filing arrived", className: "text-emerald-300" },
+  failed: { text: "the fax did not arrive", className: "text-red-300" },
+  sending: { text: "still sending", className: "text-sky-300" },
+  unknown: { text: "no delivery answer yet", className: "text-neutral-400" },
+};
+
+type Delivery = { state: string; detail: string; pages: number | null; recorded: boolean };
+
 /**
  * The EIN filing panel.
  *
@@ -47,6 +57,8 @@ export default function EinFiling({
     filing?.signedDocumentSource === "signara" ? (filing?.signedDocumentId ?? "") : "",
   );
   const [signing, setSigning] = useState<{ state: string; detail: string } | null>(null);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [checking, setChecking] = useState(false);
 
   // The signing state is the one fact that changes without Genesis acting, so it
   // is read from the server rather than inferred from the filing record — a stale
@@ -56,7 +68,10 @@ export default function EinFiling({
     fetch(`/api/businesses/${businessId}/ein-filing`)
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { signing?: { state: string; detail: string } } | null) => {
-        if (active && body?.signing) setSigning(body.signing);
+        if (!active) return;
+        if (body?.signing) setSigning(body.signing);
+        const live = (body as { delivery?: Delivery } | null)?.delivery;
+        if (live) setDelivery(live);
       })
       .catch(() => {
         /* the panel still works without it */
@@ -65,6 +80,43 @@ export default function EinFiling({
       active = false;
     };
   }, [businessId]);
+
+  /**
+   * Ask Zeus whether the fax arrived and, when it is terminal, record it.
+   *
+   * Sending is not arriving: the spool accepts the job and answers later, and a
+   * filing marked done that never landed is the one thing this path must not do.
+   * So the check is explicit — it writes the verdict (`confirmed`/`returned`) on
+   * the filing rather than only showing it.
+   */
+  async function checkDelivery() {
+    setChecking(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/ein-filing/delivery`, {
+        method: "POST",
+      });
+      const payload = (await res.json()) as { error?: string; delivery?: Delivery };
+      if (!res.ok) {
+        setError(payload.error ?? "The delivery check could not be completed.");
+        return;
+      }
+      if (payload.delivery) setDelivery(payload.delivery);
+      setMessage(
+        payload.delivery?.state === "delivered"
+          ? "The spool confirms every page arrived — the filing is confirmed."
+          : payload.delivery?.state === "failed"
+            ? "The transmission failed. The filing is returned; correct the line or the number and re-run the EIN step."
+            : "The spool still has the fax. Check again in a few minutes.",
+      );
+      router.refresh();
+    } catch {
+      setError("The request could not be completed.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -147,6 +199,18 @@ export default function EinFiling({
         </p>
       ) : null}
 
+      {delivery ? (
+        <p className="text-xs text-neutral-400">
+          Fax delivery:{" "}
+          <span className={DELIVERY_LABEL[delivery.state]?.className ?? "text-neutral-400"}>
+            {DELIVERY_LABEL[delivery.state]?.text ?? delivery.state}
+          </span>
+          {delivery.pages ? <span className="text-neutral-600"> · {delivery.pages} page(s)</span> : null}
+          {delivery.recorded ? <span className="text-neutral-600"> · recorded</span> : null}
+          {delivery.detail ? <span className="text-neutral-600"> · {delivery.detail}</span> : null}
+        </p>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-xs text-neutral-400">
           Designee name
@@ -207,6 +271,16 @@ export default function EinFiling({
         <button className="g-btn g-btn-primary" disabled={busy} type="submit">
           {busy ? "Recording…" : filing ? "Update authorization" : "Record authorization"}
         </button>
+        {filing?.faxId ? (
+          <button
+            className="g-btn g-btn-secondary"
+            disabled={checking}
+            onClick={checkDelivery}
+            type="button"
+          >
+            {checking ? "Checking…" : "Check delivery"}
+          </button>
+        ) : null}
         <span className="text-xs text-neutral-500">
           Genesis files only the signed copy — it never signs for the applicant.
         </span>

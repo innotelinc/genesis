@@ -52,7 +52,28 @@ export interface Attestation {
   reference?: string;
 }
 
-export type EinFilingStatus = "authorized" | "faxed" | "accepted" | "rejected";
+export type EinFilingStatus =
+  /** The designee authorization is recorded; nothing has been transmitted. */
+  | "authorized"
+  /** Handed to Zeus's fax spool. The transmission is not yet known to have landed. */
+  | "faxed"
+  /** The spool reports every page went through — the filing reached the IRS line. */
+  | "confirmed"
+  /** The spool gave up: the transmission did not land and the filing must be re-sent. */
+  | "returned"
+  /** The IRS issued the EIN. */
+  | "accepted"
+  /** The IRS refused the filing. */
+  | "rejected";
+
+/** What the fax spool last said about the transmission, once it said anything. */
+export interface EinFilingDelivery {
+  /** Terminal only — a non-terminal poll is not recorded. */
+  state: "delivered" | "failed";
+  checkedAt: string;
+  detail?: string;
+  pages?: number;
+}
 
 /**
  * The EIN filing record: who signed, who Genesis acts for, and what happened.
@@ -84,6 +105,8 @@ export interface EinFiling {
   /** Zeus's id for the outbound fax, once it has been sent. */
   faxId?: string;
   faxedAt?: string;
+  /** The spool's verdict on the transmission, recorded when it becomes terminal. */
+  delivery?: EinFilingDelivery;
   status: EinFilingStatus;
   note?: string;
 }

@@ -147,6 +147,72 @@ export async function zeusSendFax(ctx: StepContext, input: ZeusFaxInput): Promis
   };
 }
 
+/**
+ * The three-way delivery answer Zeus reconciles an outbound fax against.
+ *
+ * `sending` is not a failure — the spool still has the job and the caller should
+ * ask again. `delivered` and `failed` are terminal.
+ */
+export type ZeusFaxDeliveryState = "sending" | "delivered" | "failed" | "unknown";
+
+export interface ZeusFaxStatus {
+  ok: boolean;
+  status: number;
+  state: ZeusFaxDeliveryState;
+  detail: string;
+  pages?: number;
+}
+
+/**
+ * Ask Zeus whether a fax that was handed over actually arrived.
+ *
+ * `zeusSendFax` returning `ok` means the *spool* accepted the job — HylaFAX
+ * reports the transmission afterwards, and it can still come back failed. Filing
+ * an EIN is exactly the case where "accepted" must not be read as "delivered",
+ * so this reads `GET /api/fax/[id]` and reports the spool's answer.
+ */
+export async function zeusFaxStatus(
+  ctx: Pick<StepContext, "env" | "fetchImpl">,
+  faxId: string,
+): Promise<ZeusFaxStatus> {
+  const base = trimTrailingSlash(requireEnv(ctx.env, "ZEUS_API_URL"));
+  const token = requireEnv(ctx.env, "ZEUS_API_TOKEN");
+  const doFetch = ctx.fetchImpl ?? fetch;
+
+  const res = await doFetch(`${base}/api/fax/${encodeURIComponent(faxId)}`, {
+    method: "GET",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  let json: unknown = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+
+  if (!res.ok) {
+    return { ok: false, status: res.status, state: "unknown", detail: bearerError(res.status) };
+  }
+
+  const delivery = (json as { delivery?: { state?: string; detail?: string; result?: string; pages?: number } } | null)
+    ?.delivery;
+  const raw = delivery?.state;
+  const state: ZeusFaxDeliveryState =
+    raw === "sending" || raw === "delivered" || raw === "failed" ? raw : "unknown";
+
+  return {
+    ok: true,
+    status: res.status,
+    state,
+    detail:
+      delivery?.result ??
+      delivery?.detail ??
+      `Zeus reports the fax is ${state}.`,
+    pages: delivery?.pages,
+  };
+}
+
 export const zeusProvider: StepProvider = {
   key: "zeus",
   async run(ctx: StepContext): Promise<ProviderResult> {

@@ -99,7 +99,13 @@ export function finalizeEinFiling(
   previous: EinFiling | undefined,
   signed: { id: string; source: "upload" | "signara" } | undefined,
 ): EinFiling {
-  const status: EinFilingStatus = previous?.faxId ? "faxed" : "authorized";
+  // A spool verdict already on the record outranks the send state: re-recording
+  // the authorization must not walk a `confirmed` filing back to `faxed`.
+  const status: EinFilingStatus = previous?.delivery
+    ? previous.status
+    : previous?.faxId
+      ? "faxed"
+      : "authorized";
 
   return {
     designeeName: fields.designeeName,
@@ -113,7 +119,40 @@ export function finalizeEinFiling(
     toFaxNumber: previous?.toFaxNumber,
     faxId: previous?.faxId,
     faxedAt: previous?.faxedAt,
+    delivery: previous?.delivery,
     status,
     note: fields.note,
+  };
+}
+
+/** What Zeus's spool can say about an outbound fax. */
+export type FaxDeliveryOutcome = "sending" | "delivered" | "failed" | "unknown";
+
+/**
+ * Fold a fax-spool verdict into the filing record.
+ *
+ * Only a terminal answer changes the record. `sending` and `unknown` return the
+ * filing untouched, because a poll that has not resolved must never walk a
+ * `confirmed` or `returned` filing back to `faxed` — otherwise refreshing the
+ * panel would quietly erase the one fact it took a transmission to learn.
+ *
+ * A verdict also never overwrites an answer from the IRS: once the EIN has been
+ * issued (`accepted`) or refused (`rejected`), that is the later and stronger
+ * fact, and the delivery is recorded beside it rather than replacing it.
+ */
+export function applyFaxDelivery(
+  filing: EinFiling,
+  outcome: FaxDeliveryOutcome,
+  detail: string,
+  checkedAt: string,
+  pages?: number,
+): EinFiling {
+  if (outcome !== "delivered" && outcome !== "failed") return filing;
+
+  const settled = filing.status === "accepted" || filing.status === "rejected";
+  return {
+    ...filing,
+    status: settled ? filing.status : outcome === "delivered" ? "confirmed" : "returned",
+    delivery: { state: outcome, checkedAt, detail: detail || undefined, pages },
   };
 }

@@ -76,13 +76,17 @@ The response is read as either a bare array or `{ numbers: [...] }`, and the fir
 candidate with a `did` is ordered. A 401/403 is reported as a token problem rather
 than a generic failure.
 
-**To confirm:** Zeus's `/api/phone/numbers` is an authenticated *portal* endpoint
-(scoped to the signed-in user and their plan's number limit). A machine client
-needs either a service token that maps to a platform tenant account, or a
-service-scoped route posted by the Zeus side. Genesis assumes the former; if Zeus
-only accepts user sessions, this step needs a narrowly-scoped service route added
-there. Verify the response shape and the per-plan number cap before enabling it
-for real clients.
+**Auth — closed on the Zeus side (2026-10-01).** This route used to read the
+operator's `pbx_session` cookie, which a machine client cannot hold. Zeus now
+accepts a **scoped service token** (`Authorization: Bearer <token>` from its
+`SERVICE_TOKENS`) on this route, and the token's `email` names the portal account
+it acts as — so the per-plan number cap and the ownership filter still apply.
+Genesis needs `numbers:read` to search and `numbers:order` to order; search and
+order are separate scopes, so a read-only token cannot order a DID. See Zeus's
+`docs/portal-api.md` §1.
+
+**To confirm:** the response shape (bare array or `{ numbers: […] }`, both handled)
+and the per-plan number cap before enabling it for real clients.
 
 ### Fax
 
@@ -96,16 +100,27 @@ Genesis files the EIN through Zeus and never talks to a fax carrier.
 | Env | `ZEUS_API_URL`, `ZEUS_API_TOKEN`, `ZEUS_FAX_FROM_DID_ID` |
 | Send | `POST /api/fax/send` — multipart `to_number`, `from_did_id`, `file` (PDF ≤ 10 MB), optional `subject` |
 | Response | `201 { fax: { id }, sent }` — Genesis **requires** the fax id; a 2xx without one is a failure, so a filing is never recorded sent with nothing to trace it by |
+| Status | `GET /api/fax/<id>` → `{ fax, delivery: { state, status, pages, result } }` — `state` is `sending`/`delivered`/`failed`/`unknown` |
 | From | `from_did_id` is one of the account's own DIDs with fax enabled (`GET /api/phone/numbers`) |
 
 `sent: false` is not an error: it means Zeus queued or scheduled the fax and
 AvantFax has not reported the send yet. The fax is traceable by id either way.
 
-**To confirm:** `/api/fax/send` is a *portal* handler and reads the `pbx_session`
-cookie; Genesis sends `Authorization: Bearer <token>` as it does for the number
-route. This is the same gap, and it has to close on the Zeus side before the EIN
-filing is cut over to a live IRS line: a service token scoped to the account that
-owns the source DID. Also confirm the chosen DID has fax enabled.
+**Sending is not arriving.** `sent: true` means the *spool* accepted the job;
+HylaFAX reports the transmission afterwards and it can still come back failed.
+So Genesis does not treat a filing as done on `sent` — it reads the delivery
+(`GET /api/fax/<id>`, the route above) and records the terminal answer on the
+filing: `confirmed` when every page landed, `returned` when the spool gave up.
+The panel's *Check delivery* button is that read; a `sending` answer changes
+nothing, so a poll that has not resolved cannot walk a confirmed filing back.
+
+**Auth — closed on the Zeus side (2026-10-01).** `/api/fax/send` and
+`/api/fax/<id>` used to read the `pbx_session` cookie. Both now accept a scoped
+service token: `fax:send` to transmit, `fax:read` to read a fax or its delivery
+answer. Genesis's token carries both.
+
+**To confirm:** the chosen `from_did_id` has fax enabled, and the account named
+by Zeus's `SERVICE_TOKENS` owns that DID.
 
 ---
 

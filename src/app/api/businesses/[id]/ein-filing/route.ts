@@ -4,6 +4,7 @@ import { errorJson, json } from "@/lib/http";
 import { saveSignedSs4 } from "@/lib/documents/filing-store";
 import { finalizeEinFiling, parseEinFilingForm } from "@/lib/documents/ein-filing-request";
 import { fetchSigningStatus } from "@/lib/signara";
+import { zeusFaxStatus } from "@/lib/providers/zeus";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +39,31 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       })
     : null;
 
+  // The fax's delivery is read live for the same reason the signing state is:
+  // the spool resolves it without Genesis doing anything, and a stale "sent" on
+  // a filing is exactly the wrong thing to show. This is a read — recording the
+  // verdict is the delivery route's job, not a GET's.
+  const checked = filing?.faxId
+    ? await zeusFaxStatus(
+        { env: process.env as Record<string, string | undefined> },
+        filing.faxId,
+      )
+    : null;
+  const recorded = filing?.delivery;
+  const delivery = checked?.ok
+    ? { state: checked.state, detail: checked.detail, pages: checked.pages ?? null, recorded: false }
+    : recorded
+      ? { state: recorded.state, detail: recorded.detail ?? null, pages: recorded.pages ?? null, recorded: true }
+      : checked
+        ? { state: "unknown", detail: checked.detail, pages: null, recorded: false }
+        : null;
+
   return json({
     filing: filing ?? null,
     signing: signing
       ? { state: signing.state, detail: signing.detail, rawStatus: signing.rawStatus ?? null }
       : null,
+    delivery,
   });
 }
 
