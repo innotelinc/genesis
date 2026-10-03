@@ -21,7 +21,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const TIMEOUT_MS = 8000;
 
@@ -51,11 +51,13 @@ function loadEnv() {
 
 /** The shared target list. */
 const here = path.dirname(fileURLToPath(import.meta.url));
-const TARGETS = JSON.parse(
+export const TARGETS = JSON.parse(
   fs.readFileSync(path.join(here, "..", "src", "lib", "integrations.json"), "utf8"),
 ).targets;
 
-async function probe(base, health) {
+const JSON_CONTENT_TYPE = /\bapplication\/(?:[\w.-]+\+)?json\b/i;
+
+export async function probe(base, health, { json = true } = {}) {
   // A leading "/" would make `new URL` drop a base path like `/api/v1`, so join
   // the halves by hand.
   const url = `${base.replace(/\/+$/, "")}${health}`;
@@ -69,7 +71,19 @@ async function probe(base, health) {
     if (res.status === 405 || res.status === 501) {
       res = await fetch(url, { method: "GET", signal: controller.signal, redirect: "manual" });
     }
-    return { ok: res.status < 400, status: res.status };
+    // A 200 is not proof of an API: a SPA fallback answers an unknown path with
+    // HTML 200, and a login redirect answers 3xx. Neither verifies the contract
+    // this deployment depends on, so both are reported as unverified rather than
+    // reachable. Magnate is the one exception (a storefront with no health
+    // route), so it is probed with `json: false`.
+    if (res.status >= 300 && res.status < 400) {
+      return { ok: false, status: res.status, error: "redirected — the API endpoint was not verified" };
+    }
+    const contentType = res.headers.get("content-type") || "";
+    if (res.ok && json && !JSON_CONTENT_TYPE.test(contentType)) {
+      return { ok: false, status: res.status, error: "expected JSON, received a non-API response" };
+    }
+    return { ok: res.ok, status: res.status };
   } catch (error) {
     return { ok: false, status: null, error: error instanceof Error ? error.message : String(error) };
   } finally {
@@ -77,69 +91,75 @@ async function probe(base, health) {
   }
 }
 
-const env = loadEnv();
-let problems = 0;
+export async function main(env = loadEnv()) {
+  let problems = 0;
 
-console.log("genesis — integration preflight (read-only, changes nothing)");
-console.log("");
-
-for (const target of TARGETS) {
-  const base = env[target.base] ?? target.defaultBase;
-  const hasAuth = Boolean(env[target.auth]);
-  const optional = target.optional === true;
-
-  if (!base) {
-    const note = optional ? "not configured (optional)" : "NOT CONFIGURED";
-    console.log(`  ${target.key.padEnd(9)} ${note}`);
-    console.log(`  ${" ".repeat(9)} ${target.purpose}`);
-    if (!optional) problems += 1;
-    console.log("");
-    continue;
-  }
-
-  if (!hasAuth) {
-    console.log(`  ${target.key.padEnd(9)} configured, but ${target.auth} is empty`);
-    if (!optional) problems += 1;
-    console.log("");
-    continue;
-  }
-
-  if (!target.health) {
-    console.log(`  ${target.key.padEnd(9)} configured (not probed — it is a provisioning endpoint)`);
-    console.log(`  ${" ".repeat(9)} ${target.purpose}`);
-    console.log("");
-    continue;
-  }
-
-  // A target whose health route sits outside the API base's path (Signara) is
-  // probed at the origin, not under `/api/v1`.
-  let probeBase = base;
-  if (target.healthOnOrigin) {
-    try {
-      probeBase = new URL(base).origin;
-    } catch {
-      probeBase = base;
-    }
-  }
-
-  const result = await probe(probeBase, target.health);
-  if (result.ok) {
-    console.log(`  ${target.key.padEnd(9)} reachable (HTTP ${result.status})`);
-  } else if (result.status === 404) {
-    // Reachable, but not the contract Genesis speaks.
-    console.log(`  ${target.key.padEnd(9)} reachable, but no ${target.health} (HTTP 404)`);
-    if (target.healthOnOrigin) {
-      console.log(`  ${" ".repeat(9)} probed at ${probeBase} (health is outside the API prefix)`);
-    }
-    console.log(`  ${" ".repeat(9)} confirm the endpoint in docs/Integrations.md before a real launch`);
-    problems += 1;
-  } else {
-    console.log(`  ${target.key.padEnd(9)} UNREACHABLE ${result.status ?? result.error}`);
-    problems += 1;
-  }
-  console.log(`  ${" ".repeat(9)} ${target.purpose}`);
+  console.log("genesis — integration preflight (read-only, changes nothing)");
   console.log("");
+
+  for (const target of TARGETS) {
+    const base = env[target.base] ?? target.defaultBase;
+    const hasAuth = Boolean(env[target.auth]);
+    const optional = target.optional === true;
+
+    if (!base) {
+      const note = optional ? "not configured (optional)" : "NOT CONFIGURED";
+      console.log(`  ${target.key.padEnd(9)} ${note}`);
+      console.log(`  ${" ".repeat(9)} ${target.purpose}`);
+      if (!optional) problems += 1;
+      console.log("");
+      continue;
+    }
+
+    if (!hasAuth) {
+      console.log(`  ${target.key.padEnd(9)} configured, but ${target.auth} is empty`);
+      if (!optional) problems += 1;
+      console.log("");
+      continue;
+    }
+
+    if (!target.health) {
+      console.log(`  ${target.key.padEnd(9)} configured (not probed — it is a provisioning endpoint)`);
+      console.log(`  ${" ".repeat(9)} ${target.purpose}`);
+      console.log("");
+      continue;
+    }
+
+    // A target whose health route sits outside the API base's path (Signara) is
+    // probed at the origin, not under `/api/v1`.
+    let probeBase = base;
+    if (target.healthOnOrigin) {
+      try {
+        probeBase = new URL(base).origin;
+      } catch {
+        probeBase = base;
+      }
+    }
+
+    // Magnate is a storefront, not an API: it legitimately answers HTML.
+    const result = await probe(probeBase, target.health, { json: target.nonJson !== true });
+    if (result.ok) {
+      console.log(`  ${target.key.padEnd(9)} reachable (HTTP ${result.status})`);
+    } else if (result.status === 404) {
+      // Reachable, but not the contract Genesis speaks.
+      console.log(`  ${target.key.padEnd(9)} reachable, but no ${target.health} (HTTP 404)`);
+      if (target.healthOnOrigin) {
+        console.log(`  ${" ".repeat(9)} probed at ${probeBase} (health is outside the API prefix)`);
+      }
+      console.log(`  ${" ".repeat(9)} confirm the endpoint in docs/Integrations.md before a real launch`);
+      problems += 1;
+    } else {
+      console.log(`  ${target.key.padEnd(9)} UNREACHABLE ${result.error || result.status}`);
+      problems += 1;
+    }
+    console.log(`  ${" ".repeat(9)} ${target.purpose}`);
+    console.log("");
+  }
+
+  console.log(problems === 0 ? "integrations: ok" : `integrations: ${problems} problem(s)`);
+  return problems === 0 ? 0 : 1;
 }
 
-console.log(problems === 0 ? "integrations: ok" : `integrations: ${problems} problem(s)`);
-process.exit(problems === 0 ? 0 : 1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = await main();
+}

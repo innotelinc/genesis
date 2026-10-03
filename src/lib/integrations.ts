@@ -45,6 +45,11 @@ export interface IntegrationTarget {
   healthOnOrigin?: boolean;
   /** A base used when the env var is unset. */
   defaultBase?: string;
+  /**
+   * True when this target legitimately answers non-JSON (Magnate is a storefront
+   * with no health route), so the probe must not read HTML as a failed API.
+   */
+  nonJson?: boolean;
 }
 
 export const INTEGRATION_TARGETS: IntegrationTarget[] = raw.targets as IntegrationTarget[];
@@ -69,6 +74,8 @@ export interface IntegrationConfig {
   healthOnOrigin: boolean;
   /** False when the target has no health endpoint to probe. */
   probeable: boolean;
+  /** True when this target is allowed to answer non-JSON (Magnate). */
+  nonJson: boolean;
 }
 
 /** What the deployment has configured, with no network access. */
@@ -91,6 +98,7 @@ export function integrationsWithConfig(env: Record<string, string | undefined> =
       health: target.health,
       healthOnOrigin: target.healthOnOrigin === true,
       probeable: target.health !== null,
+      nonJson: target.nonJson === true,
     };
   });
 }
@@ -135,7 +143,10 @@ export interface ProbeResult {
 
 /** A fetch-shaped function, injectable so the probe is tested with no socket. */
 export type FetchLike = (url: string, init: { method: string; signal: AbortSignal; redirect: "manual" }) =>
-  Promise<{ status: number }>;
+  Promise<{ status: number; headers?: { get(name: string): string | null } }>;
+
+/** A JSON content type, with an optional structured suffix (`application/vnd.x+json`). */
+const JSON_CONTENT_TYPE = /\bapplication\/(?:[\w.-]+\+)?json\b/i;
 
 /** The probe timeout. Short on purpose: it is a preflight, not a load test. */
 export const PROBE_TIMEOUT_MS = 8000;
@@ -153,6 +164,7 @@ export async function probeBase(
   health: string,
   fetchImpl: FetchLike = fetch as unknown as FetchLike,
   timeoutMs = PROBE_TIMEOUT_MS,
+  json = true,
 ): Promise<ProbeResult> {
   // A leading "/" would make `new URL` drop a base path like `/api/v1`, so join by hand.
   const url = `${base.replace(/\/+$/, "")}${health}`;
@@ -163,7 +175,21 @@ export async function probeBase(
     if (res.status === 405 || res.status === 501) {
       res = await fetchImpl(url, { method: "GET", signal: controller.signal, redirect: "manual" });
     }
-    return { ok: res.status < 400, status: res.status };
+    // A 200 is not proof of an API: a SPA fallback answers an unknown path with HTML
+    // 200, and a login redirect answers 3xx. Neither verifies the contract this
+    // deployment depends on, so both are reported as unverified rather than reachable.
+    if (res.status >= 300 && res.status < 400) {
+      return { ok: false, status: res.status, error: "redirected — the API endpoint was not verified" };
+    }
+    // Magnate is the one target allowed to answer non-JSON (a storefront with no
+    // health route). A response that carries no headers cannot be judged, so it is
+    // left to the status alone.
+    const contentType = res.headers?.get("content-type") ?? "";
+    const ok = res.status < 400;
+    if (ok && json && res.headers && !JSON_CONTENT_TYPE.test(contentType)) {
+      return { ok: false, status: res.status, error: "expected JSON, received a non-API response" };
+    }
+    return { ok, status: res.status };
   } catch (error) {
     return { ok: false, status: null, error: error instanceof Error ? error.message : String(error) };
   } finally {
@@ -241,7 +267,7 @@ export async function reachability(
       }
     }
     const health = config.health ?? "/";
-    const result = await probeBase(probeBaseUrl, health, fetchImpl, options.timeoutMs);
+    const result = await probeBase(probeBaseUrl, health, fetchImpl, options.timeoutMs, !config.nonJson);
 
     if (result.ok) {
       integrations.push({ ...base, status: result.status, verdict: "reachable", detail: `reachable (HTTP ${result.status})` });

@@ -13,7 +13,7 @@
       "label": "Cerulean (TrustOps)",
       "base": "CERULEAN_DNS_API_URL",
       "auth": "CERULEAN_SERVICE_KEY",
-      "health": "/api/health",
+      "health": "/api/auth/config",
       "purpose": "POST /api/service/domains + /api/service/certificates — DNS zone, wildcard TLS"
     },
     {
@@ -23,7 +23,8 @@
       "auth": "MAGNATE_API_TOKEN",
       "health": "/",
       "purpose": "POST — subscription for the client",
-      "optional": true
+      "optional": true,
+      "nonJson": true
     },
     {
       "key": "oasis",
