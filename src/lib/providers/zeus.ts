@@ -20,6 +20,26 @@ interface ZeusNumber {
   server?: string;
 }
 
+/**
+ * Pull the candidate numbers out of a search response.
+ *
+ * Zeus does not wrap the list in a fixed key, and the live route answers
+ * `{ status: "success", dids: [...] }` — verified 2026-10-01 against
+ * `https://app.zeus.innotel.us` with a service token (200 JSON; the same call
+ * without the token is 401). A bare array and `{ numbers: [...] }` are still
+ * accepted, because the documented shape is not guaranteed stable.
+ */
+export function zeusSearchCandidates(json: unknown): ZeusNumber[] {
+  if (Array.isArray(json)) return json as ZeusNumber[];
+  if (json && typeof json === "object") {
+    const record = json as { numbers?: unknown; dids?: unknown; data?: unknown };
+    for (const value of [record.numbers, record.dids, record.data]) {
+      if (Array.isArray(value)) return value as ZeusNumber[];
+    }
+  }
+  return [];
+}
+
 async function zeusPost(
   ctx: StepContext,
   path: string,
@@ -238,9 +258,7 @@ export const zeusProvider: StepProvider = {
       return { status: "failed", detail: bearerError(search.status) };
     }
 
-    const candidates = Array.isArray(search.json)
-      ? (search.json as ZeusNumber[])
-      : ((search.json as { numbers?: ZeusNumber[] })?.numbers ?? []);
+    const candidates = zeusSearchCandidates(search.json);
 
     const pick = candidates.find((n) => n.did);
     if (!pick?.did) {

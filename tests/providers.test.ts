@@ -65,6 +65,50 @@ test("Zeus searches for a number, then orders the one it found", async () => {
   assert.deepEqual((calls[1].body as { action: string }).action, "order");
 });
 
+test("Zeus reads the live search shape: { status, dids: [...] }", async () => {
+  // Captured from the live route (2026-10-01): the list is under `dids`, not
+  // `numbers` and not a bare array. The provider used to miss it and report
+  // "found no available numbers" while Zeus was answering 200 with candidates.
+  const { impl, calls } = fakeFetch([
+    {
+      json: {
+        status: "success",
+        dids: [{ did: "4132642700", areacode: "413", server: "pbx-1" }],
+      },
+    },
+    { json: { status: "success" } },
+  ]);
+
+  const result = await zeusProvider.run(
+    context({
+      env: { ZEUS_API_URL: "https://app.zeus.innotel.us", ZEUS_API_TOKEN: "tok" },
+      fetchImpl: impl,
+    }),
+  );
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.evidence?.did, "4132642700");
+  assert.equal(calls.length, 2);
+  assert.equal((calls[1].body as { did: string }).did, "4132642700");
+});
+
+test("Zeus still accepts the documented { numbers: [...] } shape", async () => {
+  const { impl } = fakeFetch([
+    { json: { numbers: [{ did: "14155550100", areacode: "415" }] } },
+    { json: { ok: true } },
+  ]);
+
+  const result = await zeusProvider.run(
+    context({
+      env: { ZEUS_API_URL: "https://app.zeus.innotel.us", ZEUS_API_TOKEN: "tok" },
+      fetchImpl: impl,
+    }),
+  );
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.evidence?.did, "14155550100");
+});
+
 test("Zeus reports a rejected token instead of pretending it worked", async () => {
   const { impl } = fakeFetch([{ ok: false, status: 401, json: {} }]);
 
