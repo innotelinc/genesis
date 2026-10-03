@@ -10,6 +10,73 @@ reconcile.
 > the path below is Genesis's expectation and must be checked against the running
 > deployment.
 
+## Live validation and next milestones (2026-10-01)
+
+Read-only checks from the deployed Genesis container (`.66`, image
+`ghcr.io/innotelinc/genesis:09ae83c`) verified:
+
+- Authentik discovery returns JSON 200 and the expected Genesis issuer;
+  `GENESIS_DEV_AUTH` is unset. Session and OIDC secrets resolve through the
+  product-scoped Vault token.
+- Zeus `/api/health`, Signara origin `/health`, and the Magnate storefront
+  respond 200. These establish reachability, not service-token permissions.
+  **Follow-up (2026-10-01): the Zeus service token is now verified** — a
+  `POST /api/phone/numbers` search returns 200 JSON with it and 401 without it,
+  and the response shape is `{ status: "success", dids: [...] }` (see the Zeus
+  section). The token is stored as the `ZEUS_API_TOKEN` repository secret, so the
+  preflight's Zeus target reports reachable.
+- Cerulean `/api/auth/config` returns JSON 200. `/api/health` is **not** an API
+  route: the SPA fallback returns HTML 200. The preflight now uses auth/config
+  and rejects non-JSON API responses and login redirects.
+
+Remaining integration milestones are tracked as issues. They are ordered here the
+way they depend on each other:
+
+- [x] [#1](https://github.com/innotelinc/genesis/issues/1) — **Zeus token
+  account/scopes confirmed (2026-10-01).** A service-token `POST
+  /api/phone/numbers` search returned 200 JSON (no token → 401), and the response
+  is `{ status: "success", dids: [...] }`. The provider was reading only a bare
+  array or `{ numbers: [...] }`, so it reported "no available numbers" against a
+  successful response; it now reads `dids` and is covered by a regression test.
+  **Both scopes are confirmed:** search 200 (`numbers:read`), and an `order` with
+  no `did` returned 400 `did is required` rather than 403 (`numbers:order`) — no
+  DID was ordered. `GET /api/phone/numbers` still returns 405 — search and order
+  are `POST` only. Open follow-up: the search result looks like the account's own
+  DIDs rather than purchasable ones (see the Zeus section).
+- [ ] [#2](https://github.com/innotelinc/genesis/issues/2) — store Genesis's
+  existing plaintext sibling-service tokens in `cerulean/genesis`, then replace
+  the assignments with Vault references **after deploying the expanded startup
+  resolver**. It now resolves `ZEUS_API_TOKEN`, `CERULEAN_SERVICE_KEY`,
+  `SIGNARA_API_KEY`, `MAGNATE_API_TOKEN`, `ENTITLEMENTS_API_TOKEN`, and
+  `OASIS_PROVISION_TOKEN`, in addition to session/OIDC secrets.
+- [x] [#3](https://github.com/innotelinc/genesis/issues/3) — **Genesis Cerulean
+  service key issued (2026-10-01).** Named `genesis`, scopes `domains:write`,
+  `certs:read`, `certs:write`, `npm:read`, `npm:write`. Verified before use:
+  `GET /api/service/npm/hosts` and `GET /api/service/certificates` both answer
+  **200** with it and **401** without. Stored as the `CERULEAN_SERVICE_KEY`
+  repository secret. Still to do: a real provisioning write, which is
+  deliberately not exercised until a client is registered for real.
+- [x] [#4](https://github.com/innotelinc/genesis/issues/4) — **Signara API key
+  issued (2026-10-01).** Named `genesis`, in the Innotel organisation, scopes
+  `documents.create`, `documents.read`, `documents.download`, `signing.send`,
+  `signing.read`, `audit.read`. Verified: `GET /api/v1/documents` answers **200**
+  with it and **401** without. Stored as the `SIGNARA_API_KEY` secret. No signing
+  request or document was created.
+
+> **Signara keys need a user owner.** A key created with `userId = null`
+> authenticates but is granted **no permissions** — the guard only populates
+> `org.permissions` from the key's scopes when the owner row resolves, so every
+> gated route answers 403. Genesis's key is owned by
+> `admin@cerulean.innotel.us` (the same pattern the existing `atheniq-cert-bridge`
+> key uses). Keep that in mind for any future key.
+- [ ] [#5](https://github.com/innotelinc/genesis/issues/5) — keep Oasis
+  operator-queued until a supported provisioning endpoint exists. Magnate
+  subscription creation remains a hand-off unless its API is confirmed.
+
+No DID was ordered, domain registered, mailbox created, signature requested, or
+IRS fax sent. The Genesis code corrections above are tested locally and are not
+in the currently deployed image yet.
+
 ## Preflight: `scripts/check-integrations.mjs`
 
 Before a real launch, run the read-only preflight. It reports each platform as
@@ -20,6 +87,21 @@ reachable, unreachable, or configured-but-unprobed, and exits non-zero if a
 node scripts/check-integrations.mjs
 ```
 
+The same command runs in CI as an **advisory** job
+([`.github/workflows/integration-preflight.yml`](../.github/workflows/integration-preflight.yml))
+on a weekly schedule and on demand. It runs on the estate's self-hosted runner
+(`runs-on: [self-hosted, lan]`, registered at `/opt/actions-runner` on the build
+host) because the sibling platforms are on the private LAN — a GitHub-hosted
+runner cannot reach `192.168.1.71` and would report them all UNREACHABLE. It is
+`continue-on-error: true` on purpose: a sibling platform being down, or a
+credential not being set, is not a defect in this repo, and a red X on an
+unrelated push would train people to ignore the signal. Configure the platforms
+you have as repository secrets
+(`ZEUS_API_URL`, `ZEUS_API_TOKEN`, `CERULEAN_DNS_API_URL`, `CERULEAN_SERVICE_KEY`,
+`MAGNATE_URL`, `MAGNATE_API_TOKEN`, `SIGNARA_API_URL`, `SIGNARA_API_KEY`,
+`OASIS_PROVISION_URL`, `OASIS_PROVISION_TOKEN`); an unset one is reported as not
+configured rather than failing.
+
 It **changes nothing anywhere**: it sends a `HEAD` (falling back to `GET` only on
 `405`/`501`) to a health path. It never orders a number, registers a domain,
 creates a mailbox, opens a subscription or opens a signing request — those are
@@ -28,9 +110,22 @@ configured-but-unprobed rather than poked, because its entry point is a
 provisioning endpoint and not a health endpoint; Signara is optional and only
 probed when a key is set.
 
-`GET /api/health/integrations` reports the same thing as *configuration only*:
-a health endpoint that reaches out to five other services turns a liveness check
-into a fan-out, and one of those endpoints takes commands.
+**A 200 is not proof of an API.** For every target except Magnate the probe now
+requires a JSON content type and rejects a redirect, so a SPA fallback serving
+`index.html` with 200 — or a login redirect — is reported as unverified rather
+than reachable. Magnate is the one exception: it is a storefront with no health
+route, so its root is probed as liveness only. Cerulean is probed at
+`/api/auth/config`; its SPA fallback answers `/api/health` with HTML 200, which is
+how that endpoint looked healthy while not being an API route at all.
+
+The target list itself lives in `src/lib/integrations.json`, read by this script
+and by the app, so the CLI and the health surface cannot drift apart. The same
+verdict is available over HTTP: `GET /api/health/integrations` reports
+*configuration only* — a liveness check that reaches out to five other services
+is a fan-out, and one of those endpoints takes commands — while
+`GET /api/health/reachability` runs the same read-only probe (cached for 30s) and
+reports each platform's verdict in its body. Both stay `200`: a sibling being down
+is not Genesis being down.
 
 **Last run (2026-09-30, from the dev host):** once the trust/edge host came back,
 Zeus (`https://app.zeus.innotel.us`), Cerulean (`http://192.168.1.71:3003`) and
@@ -72,9 +167,29 @@ on the portal API, with the operations the portal's phone screen already uses.
 | Search | `POST /api/phone/numbers` — `{ action: "search", areacode, state }` |
 | Order | `POST /api/phone/numbers` — `{ action: "order", did, areacode, server }` |
 
-The response is read as either a bare array or `{ numbers: [...] }`, and the first
-candidate with a `did` is ordered. A 401/403 is reported as a token problem rather
-than a generic failure.
+**The response shape is `{ status: "success", dids: [...] }` — verified against
+the live route (2026-10-01).** A service-token `POST` with
+`{"action":"search","areacode":"512","state":"TX"}` returned **200
+`application/json`**; the same call without the token returned **401**. The
+provider reads `dids`, and still accepts `numbers` or a bare array, because the
+documented shape is not guaranteed stable. The first candidate with a `did` is
+ordered. A 401/403 is reported as a token problem rather than a generic failure.
+
+**Both scopes are confirmed on the token.** `action:"search"` answers 200
+(`numbers:read`), and an `action:"order"` request with **no `did`** answers **400
+`did is required`** — the scope check runs before the `did` check, so a 400 (not
+403) proves `numbers:order` without ordering anything. Without the token the same
+call is 401.
+
+> **Search may be returning the account's own DIDs, not purchasable ones —
+> confirm before a real order.** A search for areacode `512` returned ten DIDs
+> all described `SPRINGFLD, MA` with `routing` already set
+> (`account:235662_pjsip`) — i.e. numbers the account already owns, with the
+> areacode filter apparently ignored. Zeus's `getDIDsInfo` helper is commented
+> "Search available DIDs", but the live result looks like the account's
+> inventory. If that holds, Genesis would try to *order* a DID it already has,
+> and would not get a number in the requested region. This needs a Zeus-side
+> look before the `phone_number` step is trusted.
 
 **Auth — closed on the Zeus side (2026-10-01).** This route used to read the
 operator's `pbx_session` cookie, which a machine client cannot hold. Zeus now
@@ -101,7 +216,7 @@ Genesis files the EIN through Zeus and never talks to a fax carrier.
 | Send | `POST /api/fax/send` — multipart `to_number`, `from_did_id`, `file` (PDF ≤ 10 MB), optional `subject` |
 | Response | `201 { fax: { id }, sent }` — Genesis **requires** the fax id; a 2xx without one is a failure, so a filing is never recorded sent with nothing to trace it by |
 | Status | `GET /api/fax/<id>` → `{ fax, delivery: { state, status, pages, result } }` — `state` is `sending`/`delivered`/`failed`/`unknown` |
-| From | `from_did_id` is one of the account's own DIDs with fax enabled (`GET /api/phone/numbers`) |
+| From | `from_did_id` must be one of the account's own DIDs with fax enabled; the documented `GET /api/phone/numbers` currently returns 405, so this read contract is not yet available |
 
 `sent: false` is not an error: it means Zeus queued or scheduled the fax and
 AvantFax has not reported the send yet. The fax is traceable by id either way.
@@ -176,7 +291,7 @@ talks to BIND and the NPM API.** Genesis requests; Cerulean provisions.
 | Host | `GET /api/service/npm/hosts` then `POST` (or `PUT /:id`) — `{ domain, forward_host, forward_port, certificate_id }` |
 
 The key is a scoped service key (`Bearer ceru_…`) needing `domains:write`,
-`certs:write`, `npm:read` and `npm:write`; never the Cerulean admin password.
+`certs:read`, `certs:write`, `npm:read` and `npm:write`; never the Cerulean admin password.
 
 > **Verified against the running server (2026-09-30, `192.168.1.71:3003`).** Every
 > route above answers **401** without a key, i.e. it exists. Two corrections came

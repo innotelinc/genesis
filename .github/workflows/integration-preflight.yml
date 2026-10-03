@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# integration-preflight.yml — probe the sibling platforms, read-only.
+#
+# `scripts/check-integrations.mjs` is the preflight an operator runs before a
+# real launch: it sends a HEAD (GET only on 405/501) to each platform's health
+# route and reports reachable / unreachable / configured-but-unprobed. It makes
+# no changes anywhere and never orders a number, registers a domain, creates a
+# mailbox or opens a subscription.
+#
+# It is ADVISORY here, not a gate: a sibling platform being down or a credential
+# being unset is not a defect in this repo, and a red X on an unrelated push
+# would train people to ignore it. `continue-on-error: true` keeps the result
+# visible in the run summary without blocking a merge. The script's own exit
+# code is still the signal — a non-zero status means at least one *required*
+# integration did not answer.
+#
+# It runs on the estate's self-hosted runner (`runs-on: [self-hosted, lan]`)
+# because the sibling platforms are on the private LAN — Cerulean is
+# http://192.168.1.71:3003 — and a GitHub-hosted runner would report every
+# internal platform UNREACHABLE. That runner is registered at
+# /opt/actions-runner on the build host (`genesis-lan-dev`). If it is offline the
+# job queues; it is advisory, so a queue never blocks a merge.
+#
+# Every value comes from repository secrets; nothing is hard-coded, and the job
+# is skipped on forks (secrets are not exposed there). Configure the ones you
+# have — an unset secret simply reports that platform as not configured:
+#   ZEUS_API_URL, ZEUS_API_TOKEN, CERULEAN_DNS_API_URL, CERULEAN_SERVICE_KEY,
+#   MAGNATE_URL, MAGNATE_API_TOKEN, SIGNARA_API_URL, SIGNARA_API_KEY,
+#   OASIS_PROVISION_URL, OASIS_PROVISION_TOKEN
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Integration preflight
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 13:00 UTC — a sibling that moved or expired a key shows up
+    # here before it shows up in a launch.
+    - cron: "0 13 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Probe sibling platforms (advisory)
+    # The sibling platforms live on the estate LAN (Cerulean is
+    # http://192.168.1.71:3003), which a GitHub-hosted runner cannot reach — it
+    # would report every internal platform UNREACHABLE. So this runs on the
+    # estate's self-hosted runner, labelled `lan` (registered at
+    # /opt/actions-runner on the build host). If that runner is offline the job
+    # queues rather than failing; it is advisory either way.
+    runs-on: [self-hosted, lan]
+    if: github.repository_owner == 'innotelinc'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run the read-only preflight
+        env:
+          ZEUS_API_URL: ${{ secrets.ZEUS_API_URL }}
+          ZEUS_API_TOKEN: ${{ secrets.ZEUS_API_TOKEN }}
+          CERULEAN_DNS_API_URL: ${{ secrets.CERULEAN_DNS_API_URL }}
+          CERULEAN_SERVICE_KEY: ${{ secrets.CERULEAN_SERVICE_KEY }}
+          MAGNATE_URL: ${{ secrets.MAGNATE_URL }}
+          MAGNATE_API_TOKEN: ${{ secrets.MAGNATE_API_TOKEN }}
+          SIGNARA_API_URL: ${{ secrets.SIGNARA_API_URL }}
+          SIGNARA_API_KEY: ${{ secrets.SIGNARA_API_KEY }}
+          OASIS_PROVISION_URL: ${{ secrets.OASIS_PROVISION_URL }}
+          OASIS_PROVISION_TOKEN: ${{ secrets.OASIS_PROVISION_TOKEN }}
+        run: node scripts/check-integrations.mjs
+
+      - name: Summarize the result
+        if: always()
+        run: |
+          {
+            echo "### Integration preflight"
+            echo ""
+            echo "Advisory only — a non-zero result does not fail the build."
+            echo "See the job log for the per-platform lines."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -52,7 +52,7 @@ impersonates,** everything that needs the owner's signature.
 - **Generated PDF packets** — six documents (SS-4, bank, Google, D-U-N-S, bureaus, listings) rendered from the record. The SS-4 packet attaches the official IRS form **prefilled from the verified line mapping** and still editable, ahead of a Genesis worksheet listing every value in form order. The responsible party's own fields (line 7b's SSN and the signature) stay blank; the designee block is filled **only** once the party's authorization is on record.
 - **Credit readiness** — a six-factor, 100-point model over the credit phase: bureau-matchable identity, file age, banking history, business tradelines, bureau coverage and revolving utilization. Personal lines are excluded, because they build the owner's file, not the business's.
 - **A policy surface** — the automation policy is shown in the UI, asserted in tests, and checked in CI, so the split cannot drift from the code.
-- **A read-only integration preflight** — `scripts/check-integrations.mjs` reports whether each sibling platform answers, without ordering a number or registering anything.
+- **A read-only integration preflight** — `scripts/check-integrations.mjs` reports whether each sibling platform answers, without ordering a number or registering anything. It runs weekly in CI as an **advisory** check (`.github/workflows/integration-preflight.yml`) and never blocks a merge: a sibling being down is not a defect in this repo. A 200 alone is not proof of an API — the probe requires a JSON content type and rejects redirects, so a SPA fallback answering `index.html` is reported as unverified rather than reachable.
 - **Cerulean Authentik SSO** — clients sign in through the shared identity provider; Genesis stores no passwords and links the Authentik subject to a client record.
 
 ---
@@ -105,7 +105,7 @@ Verify the work:
 
 ```bash
 npm run typecheck    # app + tests type-check
-npm test             # 106 unit tests over the engine, policy, SS-4, providers, EIN filing, credit, Signara and PDFs
+npm test             # unit tests over the engine, policy, SS-4, providers, EIN filing, credit, Signara and PDFs
 npm run build        # production build
 ```
 
@@ -118,9 +118,10 @@ npm run build        # production build
 | [ROADMAP.md](ROADMAP.md) | What is shipped, what is open, and what comes next — the milestones through v1.0, and the exit criteria for each |
 | [docs/stack.md](docs/stack.md) | Genesis's role in the Innotel Platform Stack (BusinessOps), and what it owns/consumes |
 | [docs/Architecture.md](docs/Architecture.md) | The engine, the provider contract, the data model, the credit model, document generation, and the request flow |
-| [docs/Integrations.md](docs/Integrations.md) | The exact contract for each integration, the read-only preflight, and the assumptions that need confirming against the other platform |
+| [docs/Integrations.md](docs/Integrations.md) | The exact contract for each integration, the read-only preflight, the live-validation findings, and the assumptions that need confirming against the other platform |
 | [docs/Deployment.md](docs/Deployment.md) | The deployment runbook: the host, the image pin and rollback, the data directory, and backing up with a rehearsed restore |
 | [docs/threat-model.md](docs/threat-model.md) | What Genesis protects, what it must never hold, the adversaries with the residual risk behind each control, and where the boundary is enforced in code |
+| [`.github/workflows/`](.github/workflows) | CI (structure, container boot, type-check/test/build, policy invariants), the advisory [integration preflight](.github/workflows/integration-preflight.yml), the attribution guard, and the landing-page publish |
 
 ## Repo layout
 

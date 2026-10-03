@@ -42,10 +42,12 @@ provides, and explicitly does not own.
   registers a client's domain zone, publishes its proxy host and issues its
   wildcard TLS certificate. Genesis never calls BIND or the NPM API directly.
 - **Cerulean Vault** — secrets. `SESSION_SECRET` and `OIDC_CLIENT_SECRET` live at
-  `cerulean/genesis` and `.env` carries `vault://` references, resolved at
-  container start by `docker-entrypoint.sh` (`scripts/vault-env.mjs`) with a
-  path-scoped `genesis` token. A reference that does not resolve stops the
-  container rather than reaching the app.
+  `cerulean/genesis`; sibling-service credentials are also supported by the
+  startup resolver (live migration pending, see Integrations.md). `.env` carries
+  `vault://` references, resolved at container start by
+  `docker-entrypoint.sh` (`scripts/vault-env.mjs`) with a path-scoped `genesis`
+  token. A reference that does not resolve stops the container rather than
+  reaching the app.
 - **Magnate (RevenueOps)** — the subscription that bills for Genesis itself and
   gates paid seats. Genesis holds no payment key.
 - **Zeus (VoiceOps)** — the business telephone number, ordered through Zeus's
